@@ -1,10 +1,5 @@
 import Link from "next/link";
-import { SERVICIOS, generarAsientosDemo } from "@/lib/mock-data";
-
-// TODO: reemplazar por `select * from servicios where agencia_id = ...`
-// (RLS ya deja pasar solo los de la agencia del usuario logueado) ordenado
-// por fecha, y `select estado, count(*) from asientos where servicio_id = ...`
-// para la ocupación de cada card.
+import { createClient } from "@/lib/supabase/server";
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MESES = [
@@ -17,12 +12,29 @@ function formatFecha(iso: string) {
   return `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-export default function SalidasPage() {
-  const servicios = SERVICIOS.map((servicio) => {
-    const { asientos } = generarAsientosDemo(servicio.id);
-    const vendidos = asientos.filter((a) => a.estado !== "libre").length;
-    return { servicio, vendidos, total: asientos.length };
-  });
+export default async function SalidasPage() {
+  const supabase = await createClient();
+
+  const { data: serviciosData } = await supabase
+    .from("servicios")
+    .select("id, origen, destino, fecha, hora, tipo_coche")
+    .order("fecha", { ascending: true });
+
+  const servicios = serviciosData ?? [];
+
+  const ocupacion = await Promise.all(
+    servicios.map(async (s) => {
+      const [{ count: total }, { count: vendidos }] = await Promise.all([
+        supabase.from("asientos").select("*", { count: "exact", head: true }).eq("servicio_id", s.id),
+        supabase
+          .from("asientos")
+          .select("*", { count: "exact", head: true })
+          .eq("servicio_id", s.id)
+          .neq("estado", "libre"),
+      ]);
+      return { servicio: s, vendidos: vendidos ?? 0, total: total ?? 0 };
+    }),
+  );
 
   return (
     <div>
@@ -44,8 +56,17 @@ export default function SalidasPage() {
       </div>
 
       <div className="flex flex-col gap-3.5 px-8 py-6">
-        {servicios.map(({ servicio, vendidos, total }) => {
-          const pct = Math.round((vendidos / total) * 100);
+        {ocupacion.length === 0 && (
+          <div className="rounded-[14px] border border-line bg-white px-6 py-10 text-center text-[13px] text-ink-soft">
+            Todavía no hay servicios cargados —{" "}
+            <Link href="/servicios/nuevo" className="font-bold text-accent">
+              creá el primero
+            </Link>
+            .
+          </div>
+        )}
+        {ocupacion.map(({ servicio, vendidos, total }) => {
+          const pct = total > 0 ? Math.round((vendidos / total) * 100) : 0;
           return (
             <div
               key={servicio.id}
@@ -56,8 +77,8 @@ export default function SalidasPage() {
                   {servicio.origen} → {servicio.destino}
                 </div>
                 <div className="mt-0.5 text-[13px] text-ink-soft">
-                  {formatFecha(servicio.fecha)} · {servicio.hora} hs ·{" "}
-                  {servicio.tipoCoche}
+                  {formatFecha(servicio.fecha)} · {servicio.hora?.slice(0, 5)} hs ·{" "}
+                  {servicio.tipo_coche}
                 </div>
               </div>
               <div className="w-[220px]">

@@ -1,16 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { AsistenciaViajero, Hotel, Observacion } from "@/lib/types";
-import { AGENCIA_SEQUEIRA } from "@/lib/mock-data";
+import { crearHotel, crearAsistencia, crearObservacion } from "./actions";
 
 type Tab = "hoteles" | "asistencias" | "observaciones";
-
-let idCounter = 0;
-function nextId(prefix: string) {
-  idCounter += 1;
-  return `${prefix}-${Date.now()}-${idCounter}`;
-}
 
 const ACCENT = "#2E6E8E";
 
@@ -80,38 +75,52 @@ export function ProveedoresClient({
   asistenciasIniciales: AsistenciaViajero[];
   observacionesIniciales: Observacion[];
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
   const [tab, setTab] = useState<Tab>("hoteles");
-  const [hoteles, setHoteles] = useState(hotelesIniciales);
-  const [asistencias, setAsistencias] = useState(asistenciasIniciales);
-  const [observaciones, setObservaciones] = useState(observacionesIniciales);
+  const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({ nombre: "", contacto: "", telefono: "" });
   const [obsForm, setObsForm] = useState({ titulo: "", texto: "" });
 
   const isHoteles = tab === "hoteles";
   const isObservaciones = tab === "observaciones";
-  const items = isHoteles ? hoteles : asistencias;
+  const items = isHoteles ? hotelesIniciales : asistenciasIniciales;
 
   function changeTab(t: Tab) {
     setTab(t);
     setForm({ nombre: "", contacto: "", telefono: "" });
+    setError(null);
   }
 
   function addProveedor() {
     if (!form.nombre) return;
-    const nuevo = { id: nextId(tab), agenciaId: AGENCIA_SEQUEIRA.id, ...form };
-    if (isHoteles) setHoteles((prev) => [...prev, nuevo]);
-    else setAsistencias((prev) => [...prev, nuevo]);
-    setForm({ nombre: "", contacto: "", telefono: "" });
+    setError(null);
+    startTransition(async () => {
+      try {
+        if (isHoteles) await crearHotel(form);
+        else await crearAsistencia(form);
+        setForm({ nombre: "", contacto: "", telefono: "" });
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Error inesperado");
+      }
+    });
   }
 
   function addObservacion() {
     if (!obsForm.titulo || !obsForm.texto) return;
-    setObservaciones((prev) => [
-      ...prev,
-      { id: nextId("obs"), agenciaId: AGENCIA_SEQUEIRA.id, ...obsForm },
-    ]);
-    setObsForm({ titulo: "", texto: "" });
+    setError(null);
+    startTransition(async () => {
+      try {
+        await crearObservacion(obsForm);
+        setObsForm({ titulo: "", texto: "" });
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Error inesperado");
+      }
+    });
   }
 
   return (
@@ -149,14 +158,15 @@ export function ProveedoresClient({
                 placeholder="Texto que va a figurar en el voucher"
                 textarea
               />
+              {error && <div className="text-xs font-semibold text-red-600">{error}</div>}
               <button
                 type="button"
                 onClick={addObservacion}
-                disabled={!obsForm.titulo || !obsForm.texto}
+                disabled={!obsForm.titulo || !obsForm.texto || isPending}
                 style={{ background: ACCENT }}
                 className="mt-1 rounded-lg py-2.5 text-[13px] font-bold text-white disabled:opacity-55"
               >
-                Agregar observación
+                {isPending ? "Agregando…" : "Agregar observación"}
               </button>
             </div>
           </div>
@@ -165,12 +175,17 @@ export function ProveedoresClient({
             <div className="border-b border-line bg-app px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-ink-soft">
               Observaciones cargadas
             </div>
-            {observaciones.map((obs) => (
+            {observacionesIniciales.map((obs) => (
               <div key={obs.id} className="border-b border-[#EEF0F2] px-5 py-3.5">
                 <div className="text-[13px] font-bold text-ink">{obs.titulo}</div>
                 <div className="mt-0.5 text-[13px] text-[#4B5563]">{obs.texto}</div>
               </div>
             ))}
+            {observacionesIniciales.length === 0 && (
+              <div className="px-5 py-11 text-center text-[13px] text-ink-faint">
+                Todavía no cargás ninguna observación.
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -188,14 +203,15 @@ export function ProveedoresClient({
               />
               <Field label="Contacto" value={form.contacto} onChange={(v) => setForm((p) => ({ ...p, contacto: v }))} placeholder="Nombre de la persona de contacto" />
               <Field label="Teléfono" value={form.telefono} onChange={(v) => setForm((p) => ({ ...p, telefono: v }))} placeholder="351 555-0000" />
+              {error && <div className="text-xs font-semibold text-red-600">{error}</div>}
               <button
                 type="button"
                 onClick={addProveedor}
-                disabled={!form.nombre}
+                disabled={!form.nombre || isPending}
                 style={{ background: ACCENT }}
                 className="mt-1 rounded-lg py-2.5 text-[13px] font-bold text-white disabled:opacity-55"
               >
-                {isHoteles ? "Agregar hotel" : "Agregar asistencia"}
+                {isPending ? "Agregando…" : isHoteles ? "Agregar hotel" : "Agregar asistencia"}
               </button>
             </div>
           </div>

@@ -1,12 +1,42 @@
-import { HOTELES, ASISTENCIAS, OBSERVACIONES } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/server";
 import { NuevoServicioClient } from "./NuevoServicioClient";
+import type { AsistenciaViajero, Hotel, Observacion } from "@/lib/types";
 
-// TODO: reemplazar por selects reales de hoteles/asistencias_viajero/observaciones
-// (filtrados por agencia_id) y un insert real en `servicios` al guardar, una vez
-// conectado Supabase.
+export default async function NuevoServicioPage() {
+  const supabase = await createClient();
 
-export default function NuevoServicioPage() {
-  return (
-    <NuevoServicioClient hoteles={HOTELES} asistencias={ASISTENCIAS} observaciones={OBSERVACIONES} />
-  );
+  const [{ data: hotelesData }, { data: asistenciasData }, { data: observacionesData }] =
+    await Promise.all([
+      supabase.from("hoteles").select("id, agencia_id, nombre, contacto, telefono").order("nombre"),
+      supabase
+        .from("asistencias_viajero")
+        .select("id, agencia_id, nombre, contacto, telefono")
+        .order("nombre"),
+      supabase.from("observaciones").select("id, agencia_id, titulo, texto").order("titulo"),
+    ]);
+
+  const hoteles: Hotel[] = (hotelesData ?? []).map((h) => ({
+    id: h.id,
+    agenciaId: h.agencia_id,
+    nombre: h.nombre,
+    contacto: h.contacto ?? "",
+    telefono: h.telefono ?? "",
+  }));
+
+  const asistencias: AsistenciaViajero[] = (asistenciasData ?? []).map((a) => ({
+    id: a.id,
+    agenciaId: a.agencia_id,
+    nombre: a.nombre,
+    contacto: a.contacto ?? "",
+    telefono: a.telefono ?? "",
+  }));
+
+  const observaciones: Observacion[] = (observacionesData ?? []).map((o) => ({
+    id: o.id,
+    agenciaId: o.agencia_id,
+    titulo: o.titulo,
+    texto: o.texto,
+  }));
+
+  return <NuevoServicioClient hoteles={hoteles} asistencias={asistencias} observaciones={observaciones} />;
 }

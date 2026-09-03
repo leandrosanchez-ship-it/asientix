@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { AsistenciaViajero, Hotel, Observacion, TipoHabitacion } from "@/lib/types";
+import { crearServicio } from "./actions";
 
 const ACCENT = "#2E6E8E";
 const TIPOS_COCHE = ["Comun", "Semi-Cama", "Cama", "Ejecutivo"];
@@ -102,12 +104,17 @@ export function NuevoServicioClient({
   asistencias: AsistenciaViajero[];
   observaciones: Observacion[];
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
   const [form, setForm] = useState<Form>(emptyForm());
   const [incluyeHotel, setIncluyeHotel] = useState(false);
   const [incluyeAsistencia, setIncluyeAsistencia] = useState(false);
   const [selectedObs, setSelectedObs] = useState<string[]>([]);
   const [selectedHab, setSelectedHab] = useState<TipoHabitacion[]>([]);
   const [saved, setSaved] = useState(false);
+  const [nuevoServicioId, setNuevoServicioId] = useState<string | null>(null);
 
   function setField<K extends keyof Form>(field: K, value: Form[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -128,14 +135,42 @@ export function NuevoServicioClient({
     setSelectedObs([]);
     setSelectedHab([]);
     setSaved(false);
+    setNuevoServicioId(null);
+    setError(null);
   }
 
   const canSave = !!(form.destino && form.fecha);
 
   function save() {
     if (!canSave) return;
-    // TODO: insert real en `servicios` (+ generar sus `asientos`) al conectar Supabase.
-    setSaved(true);
+    setError(null);
+    startTransition(async () => {
+      try {
+        const id = await crearServicio({
+          origen: form.origen,
+          destino: form.destino,
+          fecha: form.fecha,
+          hora: form.hora,
+          tipoCoche: form.tipo,
+          unidad: form.unidad,
+          precioPasaje: form.precio,
+          incluyeHotel,
+          hotelId: form.hotelId,
+          tiposHabitacionDisponibles: selectedHab,
+          incluyeAsistencia,
+          asistenciaId: form.asistenciaId,
+          observacionesIds: selectedObs,
+        });
+        setNuevoServicioId(id);
+        setSaved(true);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Error inesperado");
+      }
+    });
+  }
+
+  function irAlMapa() {
+    if (nuevoServicioId) router.push(`/servicios/${nuevoServicioId}`);
   }
 
   return (
@@ -299,32 +334,45 @@ export function NuevoServicioClient({
             <div className="text-[13px] font-bold text-[#15803D]">
               ✓ Servicio creado — ya está disponible en el listado de Salidas.
             </div>
-            <button
-              type="button"
-              onClick={reset}
-              className="whitespace-nowrap rounded-lg border border-[#BBF0CE] bg-white px-3.5 py-2 text-xs font-bold text-[#15803D]"
-            >
-              Cargar otro
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={reset}
+                className="whitespace-nowrap rounded-lg border border-[#BBF0CE] bg-white px-3.5 py-2 text-xs font-bold text-[#15803D]"
+              >
+                Cargar otro
+              </button>
+              <button
+                type="button"
+                onClick={irAlMapa}
+                style={{ background: ACCENT }}
+                className="whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-bold text-white"
+              >
+                Ver mapa de asientos →
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="flex justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded-[10px] border border-line px-[18px] py-2.5 text-[13px] font-semibold text-ink"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={!canSave}
-              style={{ background: ACCENT }}
-              className="rounded-[10px] px-[18px] py-2.5 text-[13px] font-bold text-white disabled:opacity-55"
-            >
-              Guardar servicio
-            </button>
+          <div className="flex flex-col items-end gap-2.5">
+            {error && <div className="text-xs font-semibold text-red-600">{error}</div>}
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-[10px] border border-line px-[18px] py-2.5 text-[13px] font-semibold text-ink"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                disabled={!canSave || isPending}
+                style={{ background: ACCENT }}
+                className="rounded-[10px] px-[18px] py-2.5 text-[13px] font-bold text-white disabled:opacity-55"
+              >
+                {isPending ? "Guardando…" : "Guardar servicio"}
+              </button>
+            </div>
           </div>
         )}
       </div>

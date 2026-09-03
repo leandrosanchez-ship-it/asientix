@@ -13,10 +13,11 @@ import type {
   Servicio,
   TipoHabitacion,
 } from "@/lib/types";
-import { SUPERIOR_IDS, INFERIOR_IDS, AGENCIA_SEQUEIRA } from "@/lib/mock-data";
+import { SUPERIOR_IDS, INFERIOR_IDS } from "@/lib/mock-data";
 import { SeatMap, type SeatVM } from "./SeatMap";
 import { ReservationWizard, type PasajeroForm } from "./ReservationWizard";
 import { SeatDetailModal, habitacionLabel, type GrupoInfo } from "./SeatDetailModal";
+import { crearReservaGrupal, marcarPagado as marcarPagadoAction } from "./actions";
 
 const ACCENT = "#2E6E8E";
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -49,6 +50,7 @@ export function MapaAsientosClient({
   clientesIniciales,
   reservasIniciales,
   reservaPasajerosIniciales,
+  pagosIniciales,
   hotel,
   asistencia,
   observaciones,
@@ -58,6 +60,7 @@ export function MapaAsientosClient({
   clientesIniciales: Cliente[];
   reservasIniciales: Reserva[];
   reservaPasajerosIniciales: ReservaPasajero[];
+  pagosIniciales: Pago[];
   hotel: Hotel | null;
   asistencia: AsistenciaViajero | null;
   observaciones: Observacion[];
@@ -66,7 +69,7 @@ export function MapaAsientosClient({
   const [clientes, setClientes] = useState(clientesIniciales);
   const [reservas, setReservas] = useState(reservasIniciales);
   const [reservaPasajeros, setReservaPasajeros] = useState(reservaPasajerosIniciales);
-  const [pagos, setPagos] = useState<Pago[]>([]);
+  const [pagos, setPagos] = useState<Pago[]>(pagosIniciales);
 
   const [floor, setFloor] = useState<"superior" | "inferior">("superior");
   const [cart, setCart] = useState<number[]>([]);
@@ -123,7 +126,7 @@ export function MapaAsientosClient({
 
     const nuevaReserva: Reserva = {
       id: reservaId,
-      agenciaId: AGENCIA_SEQUEIRA.id,
+      agenciaId: servicio.agenciaId,
       servicioId: servicio.id,
       habitacionTipo,
       codigoValidacion,
@@ -131,12 +134,14 @@ export function MapaAsientosClient({
 
     const nuevosClientes: Cliente[] = [];
     const nuevosRP: ReservaPasajero[] = [];
+    const asientoIds: string[] = [];
 
     cart.forEach((numero, idx) => {
       const form = forms[idx];
       const asiento = seatsByNumero.get(numero)!.asiento;
       const clienteId = nextId("cliente");
-      nuevosClientes.push({ id: clienteId, agenciaId: AGENCIA_SEQUEIRA.id, ...form });
+      asientoIds.push(asiento.id);
+      nuevosClientes.push({ id: clienteId, agenciaId: servicio.agenciaId, ...form });
       nuevosRP.push({
         id: nextId("rp"),
         reservaId,
@@ -156,6 +161,42 @@ export function MapaAsientosClient({
 
     setCart([]);
     setWizardOpen(false);
+
+    const clienteIdsOptimistas = nuevosClientes.map((c) => c.id);
+    const rpIdsOptimistas = nuevosRP.map((rp) => rp.id);
+
+    crearReservaGrupal({
+      servicioId: servicio.id,
+      asientoIds,
+      forms,
+      responsableIdx,
+      habitacionTipo,
+      precioPasaje: servicio.precioPasaje,
+      codigoValidacion,
+    })
+      .then((real) => {
+        // Reemplaza los IDs optimistas (locales) por los reales de Supabase,
+        // para que acciones posteriores (ej. marcar como pagado) usen IDs válidos.
+        setReservas((prev) =>
+          prev.map((r) => (r.id === reservaId ? { ...r, id: real.reservaId } : r)),
+        );
+        setClientes((prev) =>
+          prev.map((c) => {
+            const i = clienteIdsOptimistas.indexOf(c.id);
+            return i === -1 ? c : { ...c, id: real.clienteIds[i] };
+          }),
+        );
+        setReservaPasajeros((prev) =>
+          prev.map((rp) => {
+            const i = rpIdsOptimistas.indexOf(rp.id);
+            if (i === -1) return rp;
+            return { ...rp, id: real.reservaPasajeroIds[i], reservaId: real.reservaId, clienteId: real.clienteIds[i] };
+          }),
+        );
+      })
+      .catch((e) => {
+        setToast(`✕ No se pudo guardar la reserva en el servidor: ${e instanceof Error ? e.message : "error"}`);
+      });
   }
 
   function onMarcarPagado(numero: number) {
@@ -172,6 +213,15 @@ export function MapaAsientosClient({
     setAsientos((prev) =>
       prev.map((a) => (a.numero === numero && a.estado === "pendiente" ? { ...a, estado: "ocupado" } : a)),
     );
+
+    marcarPagadoAction({
+      servicioId: servicio.id,
+      asientoId: seat.asiento.id,
+      reservaPasajeroId: rp.id,
+      monto: saldo,
+    }).catch((e) => {
+      setToast(`✕ No se pudo guardar el pago en el servidor: ${e instanceof Error ? e.message : "error"}`);
+    });
   }
 
   function grupoDe(numero: number): GrupoInfo | null {

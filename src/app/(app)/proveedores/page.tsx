@@ -1,16 +1,48 @@
-import { HOTELES, ASISTENCIAS, OBSERVACIONES } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/server";
 import { ProveedoresClient } from "./ProveedoresClient";
+import type { AsistenciaViajero, Hotel, Observacion } from "@/lib/types";
 
-// TODO: reemplazar por selects a `hoteles`/`asistencias_viajero`/`observaciones`
-// filtrados por agencia_id (RLS ya se encarga del aislamiento) una vez conectado
-// Supabase.
+export default async function ProveedoresPage() {
+  const supabase = await createClient();
 
-export default function ProveedoresPage() {
+  const [{ data: hotelesData }, { data: asistenciasData }, { data: observacionesData }] =
+    await Promise.all([
+      supabase.from("hoteles").select("id, agencia_id, nombre, contacto, telefono").order("nombre"),
+      supabase
+        .from("asistencias_viajero")
+        .select("id, agencia_id, nombre, contacto, telefono")
+        .order("nombre"),
+      supabase.from("observaciones").select("id, agencia_id, titulo, texto").order("titulo"),
+    ]);
+
+  const hoteles: Hotel[] = (hotelesData ?? []).map((h) => ({
+    id: h.id,
+    agenciaId: h.agencia_id,
+    nombre: h.nombre,
+    contacto: h.contacto ?? "",
+    telefono: h.telefono ?? "",
+  }));
+
+  const asistencias: AsistenciaViajero[] = (asistenciasData ?? []).map((a) => ({
+    id: a.id,
+    agenciaId: a.agencia_id,
+    nombre: a.nombre,
+    contacto: a.contacto ?? "",
+    telefono: a.telefono ?? "",
+  }));
+
+  const observaciones: Observacion[] = (observacionesData ?? []).map((o) => ({
+    id: o.id,
+    agenciaId: o.agencia_id,
+    titulo: o.titulo,
+    texto: o.texto,
+  }));
+
   return (
     <ProveedoresClient
-      hotelesIniciales={HOTELES}
-      asistenciasIniciales={ASISTENCIAS}
-      observacionesIniciales={OBSERVACIONES}
+      hotelesIniciales={hoteles}
+      asistenciasIniciales={asistencias}
+      observacionesIniciales={observaciones}
     />
   );
 }
