@@ -10,6 +10,13 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
+  // Todavía no hay proyecto Supabase conectado (ver src/lib/current-user.ts):
+  // no tiene sentido exigir sesión real si no hay dónde autenticarse. En
+  // cuanto se agreguen las env vars, este bypass se desactiva solo.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
