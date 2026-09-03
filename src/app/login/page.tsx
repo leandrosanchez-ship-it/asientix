@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { LoginForm } from "./LoginForm";
 
 export default function LoginPage() {
@@ -51,7 +52,9 @@ export default function LoginPage() {
 
       {/* Panel derecho: formulario */}
       <div className="flex flex-1 items-center justify-center bg-app px-6">
-        <LoginForm />
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );

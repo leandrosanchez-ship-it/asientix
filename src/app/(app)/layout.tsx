@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/current-user";
 import { NavBar } from "@/components/NavBar";
+import { InactivityGuard } from "@/components/InactivityGuard";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const usuario = await getCurrentUser();
@@ -13,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-app">
+      <InactivityGuard />
       <NavBar usuario={usuario} />
       {children}
     </div>

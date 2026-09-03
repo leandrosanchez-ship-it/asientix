@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const cerradaPorInactividad = searchParams.get("motivo") === "inactividad";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +45,12 @@ export function LoginForm() {
       <p className="mt-1.5 text-[13px] text-ink-soft">
         Ingresá con el usuario y contraseña que te dieron.
       </p>
+
+      {cerradaPorInactividad && !error && (
+        <div className="mt-[18px] rounded-[9px] border border-line bg-app px-3.5 py-2.5 text-[12.5px] font-semibold text-ink-soft">
+          Tu sesión se cerró sola por inactividad. Volvé a ingresar para continuar.
+        </div>
+      )}
 
       {error && (
         <div className="mt-[18px] rounded-[9px] border border-bad-border bg-bad-bg px-3.5 py-2.5 text-[12.5px] font-semibold text-bad-ink">
