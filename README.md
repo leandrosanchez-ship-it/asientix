@@ -10,7 +10,9 @@ con Sequeira Tours (cliente piloto).
 - **Next.js 16** (App Router, Turbopack) + TypeScript + Tailwind CSS v4
 - **Supabase** (Postgres + Auth) — aislamiento multi-agencia por Row Level Security,
   esquema en `supabase/migrations/`
-- **Vercel** — deploy automático en cada push a `main`
+- **Vercel** — deploy automático en cada push a `main`, proyecto `asientix` bajo
+  la cuenta `leandrosanchez-ship-it`, dominio `asientix.com.ar` (comprado en NIC.ar,
+  conectado vía registros A a Vercel)
 
 ## Poner en marcha
 
@@ -40,5 +42,9 @@ que el proyecto esté linkeado.
 
 - ✅ Esquema de base de datos (`supabase/migrations/0001_init.sql`)
 - ✅ Auth + `/login` (Supabase Auth, coincide con el diseño de `Login.dc.html`)
-- ⏳ Resto de las pantallas (Salidas, Mapa de asientos, Superadmin, etc.) — en
+- ✅ `/salidas` y `/servicios/[id]` (Mapa de Asientos, reserva grupal con asistente) —
+  con datos de ejemplo, todavía sin Supabase conectado
+- ✅ Proyecto Vercel enlazado y conectado al repo de GitHub; dominio propio en curso
+- ⏳ Resto de las pantallas (Clientes, Alta de servicio, Proveedores, Cobros,
+  Reportes, Mensajes, Boleto, Caja diaria, Cancelaciones, Superadmin) — en
   construcción, siguiendo la maqueta en `../mockup/pantallas/`.
