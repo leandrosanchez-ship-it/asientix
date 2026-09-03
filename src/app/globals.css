@@ -1,26 +1,46 @@
 @import "tailwindcss";
 
+/* Paleta y tipografía de Asientix — tomadas tal cual de la maqueta (.dc.html). */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --app-bg: #f4f5f7;
+  --ink: #1c1f27;
+  --ink-soft: #6b7280;
+  --ink-faint: #9aa1ac;
+  --line: #e3e5ea;
+  --accent: #2e6e8e;
+  --accent-ink: #ffffff;
+  --good-bg: #dcfce7;
+  --good-border: #bbf0ce;
+  --good-ink: #15803d;
+  --warn-bg: #fef3c7;
+  --warn-border: #fbe0a0;
+  --warn-ink: #92400e;
+  --bad-bg: #fee2e2;
+  --bad-border: #f8c6c6;
+  --bad-ink: #b91c1c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-app: var(--app-bg);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-good-bg: var(--good-bg);
+  --color-good-border: var(--good-border);
+  --color-good-ink: var(--good-ink);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-border: var(--warn-border);
+  --color-warn-ink: var(--warn-ink);
+  --color-bad-bg: var(--bad-bg);
+  --color-bad-border: var(--bad-border);
+  --color-bad-ink: var(--bad-ink);
+  --font-sans: var(--font-public-sans);
+  --font-display: var(--font-manrope);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+::placeholder {
+  color: var(--ink-faint);
 }

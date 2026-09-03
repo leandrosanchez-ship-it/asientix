@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Asientix — webapp
 
-## Getting Started
+Código real de **Asientix**, desarrollado por **Assertix Software**. Next.js (App
+Router) + Supabase + Vercel, 100% web — ver `../tecnico/asientix-blueprint.html`
+para la arquitectura completa y `../propuesta/` para el alcance funcional acordado
+con Sequeira Tours (cliente piloto).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router, Turbopack) + TypeScript + Tailwind CSS v4
+- **Supabase** (Postgres + Auth) — aislamiento multi-agencia por Row Level Security,
+  esquema en `supabase/migrations/`
+- **Vercel** — deploy automático en cada push a `main`
+
+## Poner en marcha
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.local.example .env.local   # completar con los datos del proyecto Supabase
+npm run dev                         # http://localhost:3002
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Base de datos
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`supabase/migrations/0001_init.sql` tiene el esquema inicial completo (agencias,
+usuarios/roles/permisos, proveedores, servicios, asientos, reservas, pagos, tareas,
+mensajes) con las políticas de Row Level Security ya definidas. Aplicarlo desde el
+SQL Editor del proyecto Supabase, o con la Supabase CLI (`supabase db push`) una vez
+que el proyecto esté linkeado.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Modelo de usuarios (ver Blueprint para el detalle completo)
 
-## Learn More
+- **superadmin** (Assertix): sin `agencia_id`, ve y administra todas las agencias.
+  Único que puede dar de alta agencias y usuarios — no hay registro propio.
+- **admin**: ve todas las pantallas de su agencia.
+- **vendedor**: ve solo las pantallas listadas en su columna `permisos`, elegidas
+  por el superadmin al crear el usuario.
 
-To learn more about Next.js, take a look at the following resources:
+## Estado
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- ✅ Esquema de base de datos (`supabase/migrations/0001_init.sql`)
+- ✅ Auth + `/login` (Supabase Auth, coincide con el diseño de `Login.dc.html`)
+- ⏳ Resto de las pantallas (Salidas, Mapa de asientos, Superadmin, etc.) — en
+  construcción, siguiendo la maqueta en `../mockup/pantallas/`.
