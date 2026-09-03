@@ -18,6 +18,7 @@ import { SeatMap, type SeatVM } from "./SeatMap";
 import { ReservationWizard, type PasajeroForm } from "./ReservationWizard";
 import { SeatDetailModal, habitacionLabel, type GrupoInfo } from "./SeatDetailModal";
 import { crearReservaGrupal, marcarPagado as marcarPagadoAction } from "./actions";
+import { descargarBoletoPdf } from "@/lib/descargar-boleto";
 
 const ACCENT = "#2E6E8E";
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -251,15 +252,12 @@ export function MapaAsientosClient({
 
   function onDescargarBoleto(numero: number) {
     const seat = seatsByNumero.get(numero);
-    const grupo = grupoDe(numero);
-    if (!seat) return;
-    if (grupo) {
-      const responsable = seat.cliente ? `${seat.cliente.apellido}-${seat.cliente.nombre}` : "pasajero";
-      setToast(`✓ Se descargó boleto-grupal-${slug(responsable)}-asientos-${grupo.asientos.join("-")}.pdf`);
-    } else {
-      const nombre = seat.cliente ? `${seat.cliente.apellido}-${seat.cliente.nombre}` : "pasajero";
-      setToast(`✓ Se descargó boleto-${slug(nombre)}-asiento${numero}.pdf`);
-    }
+    const rp = seat && rpByAsientoId.get(seat.asiento.id);
+    if (!seat || !rp) return;
+    setToast("Generando boleto…");
+    descargarBoletoPdf(rp.id)
+      .then((filename) => setToast(`✓ Se descargó ${filename}`))
+      .catch((e) => setToast(`✕ No se pudo generar el boleto: ${e instanceof Error ? e.message : "error"}`));
   }
 
   const modalSeat = modalNumero !== null ? seatsByNumero.get(modalNumero) : null;

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { registrarPago } from "./actions";
+import { descargarBoletoPdf } from "@/lib/descargar-boleto";
 
 const ACCENT = "#2E6E8E";
 
@@ -20,16 +21,6 @@ export interface FilaCobro {
 
 function fmt(n: number) {
   return "$" + Math.round(n).toLocaleString("es-AR");
-}
-
-function slug(s: string) {
-  return s
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
 }
 
 function waLink(nombre: string, telefono: string, saldo: number, servicio: string) {
@@ -85,12 +76,10 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
   }
 
   function descargarBoleto(fila: FilaCobro) {
-    const nombreArchivo = fila.pasajero
-      .split(",")
-      .map((p) => slug(p))
-      .filter(Boolean)
-      .join("-");
-    setToast(`✓ Se descargó boleto-${nombreArchivo || "pasajero"}-asiento${fila.asiento}.pdf`);
+    setToast("Generando boleto…");
+    descargarBoletoPdf(fila.id)
+      .then((filename) => setToast(`✓ Se descargó ${filename}`))
+      .catch((e) => setToast(`✕ No se pudo generar el boleto: ${e instanceof Error ? e.message : "error"}`));
   }
 
   return (
