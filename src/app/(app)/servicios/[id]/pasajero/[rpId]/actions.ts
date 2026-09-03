@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 
 export async function cancelarPasajero(input: {
   reservaPasajeroId: string;
@@ -10,7 +10,7 @@ export async function cancelarPasajero(input: {
   reembolso: boolean;
 }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
 
   const supabase = await createClient();
 
@@ -62,7 +62,7 @@ export async function reprogramarPasajero(input: {
   nuevoServicioId: string;
 }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
 
   const supabase = await createClient();
 

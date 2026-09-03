@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 
 export async function registrarPago(input: { reservaPasajeroId: string; monto: number }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "cobros")) throw new Error("No autorizado");
   if (!input.monto || input.monto <= 0) throw new Error("El monto tiene que ser mayor a 0");
 
   const supabase = await createClient();

@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import type { EstadoTarea } from "./TareasClient";
 
 export async function crearTarea(input: { titulo: string; fecha: string }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "tareas")) throw new Error("No autorizado");
   if (!input.titulo.trim()) throw new Error("El título es obligatorio");
 
   const supabase = await createClient();
@@ -24,7 +24,7 @@ export async function crearTarea(input: { titulo: string; fecha: string }) {
 
 export async function moverTarea(input: { id: string; estado: EstadoTarea }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "tareas")) throw new Error("No autorizado");
 
   const supabase = await createClient();
   const { error } = await supabase.from("tareas").update({ estado: input.estado }).eq("id", input.id);
@@ -35,7 +35,7 @@ export async function moverTarea(input: { id: string; estado: EstadoTarea }) {
 
 export async function limpiarFinalizadas(input: { ids: string[] }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "tareas")) throw new Error("No autorizado");
   if (input.ids.length === 0) return;
 
   const supabase = await createClient();

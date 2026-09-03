@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MESES = [
@@ -13,6 +14,7 @@ function formatFecha(iso: string) {
 }
 
 export default async function SalidasPage() {
+  await requirePantalla("salidas");
   const supabase = await createClient();
 
   const { data: serviciosData } = await supabase

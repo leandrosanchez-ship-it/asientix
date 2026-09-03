@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 
 export async function guardarPlantilla(input: { tipo: "saldo" | "viaje" | "cumple" | "promo"; texto: string }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "mensajes")) throw new Error("No autorizado");
   if (!input.texto.trim()) throw new Error("El mensaje no puede estar vacío");
 
   const supabase = await createClient();

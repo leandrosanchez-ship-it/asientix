@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 import { MapaAsientosClient } from "./MapaAsientosClient";
 import type {
   Asiento,
@@ -14,6 +15,7 @@ import type {
 } from "@/lib/types";
 
 export default async function ServicioPage({ params }: PageProps<"/servicios/[id]">) {
+  await requirePantalla("salidas");
   const { id } = await params;
   const supabase = await createClient();
 

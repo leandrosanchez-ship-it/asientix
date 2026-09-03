@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 import { CancelacionClient, type EventoHistorial, type ServicioOption } from "./CancelacionClient";
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -44,6 +45,7 @@ export default async function CancelacionPage({
 }: {
   params: Promise<{ id: string; rpId: string }>;
 }) {
+  await requirePantalla("salidas");
   const { id: servicioId, rpId } = await params;
   const supabase = await createClient();
 

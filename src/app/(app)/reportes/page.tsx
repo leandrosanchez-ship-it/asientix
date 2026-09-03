@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 import { ReportesClient, type MesData, type Movimiento, type ServicioOption } from "./ReportesClient";
 
 const MESES_LABEL = [
@@ -28,6 +29,7 @@ function fechaDDMMYYYY(iso: string) {
 }
 
 export default async function ReportesPage() {
+  await requirePantalla("reportes");
   const supabase = await createClient();
 
   const { data: serviciosData } = await supabase

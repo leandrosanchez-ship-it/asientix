@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { requirePantalla } from "@/lib/current-user";
 import { MensajesClient, type Recipient, type Plantillas } from "./MensajesClient";
 
 function isoLocal(d: Date) {
@@ -20,7 +20,7 @@ function edadDe(nacimiento: string | null): number | null {
 }
 
 export default async function MensajesPage() {
-  const usuario = await getCurrentUser();
+  const usuario = await requirePantalla("mensajes");
   const supabase = await createClient();
 
   const { data: agenciaData } = usuario?.agenciaId

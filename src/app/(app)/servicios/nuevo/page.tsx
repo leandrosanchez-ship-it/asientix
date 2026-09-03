@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 import { NuevoServicioClient } from "./NuevoServicioClient";
 import type { AsistenciaViajero, Hotel, Observacion } from "@/lib/types";
 
 export default async function NuevoServicioPage() {
+  await requirePantalla("salidas");
   const supabase = await createClient();
 
   const [{ data: hotelesData }, { data: asistenciasData }, { data: observacionesData }] =

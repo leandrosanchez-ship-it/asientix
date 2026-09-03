@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 
 function isoLocal(d: Date) {
   const y = d.getFullYear();
@@ -13,7 +13,7 @@ function isoLocal(d: Date) {
 
 export async function cerrarCaja(input: { efectivoEsperado: number; efectivoContado: number }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "caja")) throw new Error("No autorizado");
 
   const supabase = await createClient();
   const diferencia = input.efectivoContado - input.efectivoEsperado;

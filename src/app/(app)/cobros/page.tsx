@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 import { CobrosClient, type FilaCobro } from "./CobrosClient";
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -13,6 +14,7 @@ function formatFechaCorta(iso: string) {
 }
 
 export default async function CobrosPage() {
+  await requirePantalla("cobros");
   const supabase = await createClient();
 
   const { data: rpData } = await supabase

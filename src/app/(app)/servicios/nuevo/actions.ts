@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import { SUPERIOR_IDS, INFERIOR_IDS } from "@/lib/mock-data";
 import type { TipoHabitacion } from "@/lib/types";
 
@@ -24,7 +24,7 @@ export interface CrearServicioInput {
 
 export async function crearServicio(input: CrearServicioInput) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
   if (!input.destino.trim() || !input.fecha) {
     throw new Error("Destino y fecha son obligatorios");
   }

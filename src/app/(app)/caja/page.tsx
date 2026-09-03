@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 import { CajaClient, type Movimiento, type Cierre } from "./CajaClient";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -12,6 +13,7 @@ function isoLocal(d: Date) {
 }
 
 export default async function CajaPage() {
+  await requirePantalla("caja");
   const supabase = await createClient();
 
   const hoy = new Date();

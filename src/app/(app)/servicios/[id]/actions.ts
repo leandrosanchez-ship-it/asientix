@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import type { PasajeroForm } from "./ReservationWizard";
 import type { TipoHabitacion } from "@/lib/types";
 
@@ -18,7 +18,7 @@ export interface CrearReservaGrupalInput {
 
 export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
 
   const supabase = await createClient();
 
@@ -109,7 +109,7 @@ export async function marcarPagado(input: {
   monto: number;
 }) {
   const usuario = await getCurrentUser();
-  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
   if (input.monto <= 0) return;
 
   const supabase = await createClient();

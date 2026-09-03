@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePantalla } from "@/lib/current-user";
 import { TareasClient, type Tarea, type WeekDay } from "./TareasClient";
 
 const LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -11,6 +12,7 @@ function isoLocal(d: Date) {
 }
 
 export default async function TareasPage() {
+  await requirePantalla("tareas");
   const supabase = await createClient();
 
   const today = new Date();
