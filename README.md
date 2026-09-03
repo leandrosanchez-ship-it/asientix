@@ -40,16 +40,26 @@ que el proyecto esté linkeado.
 
 ## Estado
 
+Las 15 pantallas del alcance funcional están construidas y conectadas a Supabase
+real (no quedan pantallas en `mock-data.ts`):
+
 - ✅ Esquema de base de datos (`supabase/migrations/`), con `service_role` y
   `authenticated` correctamente `GRANT`eados (ver 0002/0003 — sin esto cualquier
   select/insert vía RLS falla en silencio pese a políticas correctas)
 - ✅ Auth + `/login` (Supabase Auth real, coincide con el diseño de `Login.dc.html`)
 - ✅ `/superadmin` — alta de agencias/usuarios reales (fuera del layout de agencia)
-- ✅ Proveedores, Nuevo servicio, Salidas, `/servicios/[id]` (Mapa de Asientos +
-  reserva grupal + marcar pagado) — **conectados a Supabase real**, verificados
-  end-to-end (crear servicio → reservar → pagar → persistido en la base)
+- ✅ Proveedores, Nuevo servicio, Salidas, Mapa de asientos (reserva grupal, marcar
+  pagado, boleto en PDF real con QR)
+- ✅ Clientes (base reutilizable, viajes/último viaje calculados)
+- ✅ Cobros pendientes (registrar pago parcial, WhatsApp, boleto)
+- ✅ Reportes (KPIs, facturación por ruta, histórico de movimientos, export de
+  listas de pasajeros por plantilla)
+- ✅ Tareas (kanban semanal real)
+- ✅ Mensajes (plantillas persistidas, WhatsApp con datos reales, filtro por edad)
+- ✅ Caja diaria (arqueo real, cierre persistido — `cierres_caja`)
+- ✅ Cancelar / reprogramar pasajero (con historial real en `eventos_reserva`)
 - ✅ Producción: `https://asientix.com.ar`, env vars reales en Vercel, deploy
   automático en cada push a `main`
-- ⏳ Resto de las pantallas (Clientes, Cobros/Cobros pendientes, Reportes, Tareas,
-  Mensajes, Boleto real en PDF, Caja diaria, Cancelaciones) — siguiendo la maqueta
-  en `../mockup/pantallas/`.
+
+Pendiente (no bloqueante para el piloto): Backups quedó fuera de alcance (arquitectura
+100% web, sin instalación local que respaldar).
