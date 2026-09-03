@@ -22,7 +22,7 @@ export async function registrarPago(input: { reservaPasajeroId: string; monto: n
   // (seña), pasa a "ocupado".
   const { data: rp } = await supabase
     .from("reserva_pasajeros")
-    .select("asiento_id, precio")
+    .select("reserva_id, asiento_id, precio")
     .eq("id", input.reservaPasajeroId)
     .single();
   if (rp) {
@@ -34,6 +34,13 @@ export async function registrarPago(input: { reservaPasajeroId: string; monto: n
     if (totalPagado >= Number(rp.precio)) {
       await supabase.from("asientos").update({ estado: "ocupado" }).eq("id", rp.asiento_id).eq("estado", "pendiente");
     }
+
+    await supabase.from("eventos_reserva").insert({
+      reserva_id: rp.reserva_id,
+      usuario_id: usuario.id,
+      accion: "pago_registrado",
+      detalle: { monto: input.monto },
+    });
   }
 
   revalidatePath("/cobros");

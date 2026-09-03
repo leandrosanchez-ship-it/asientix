@@ -87,6 +87,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
       ? await supabase
           .from("reserva_pasajeros")
           .select("id, reserva_id, asiento_id, cliente_id, es_responsable, precio")
+          .eq("estado", "activo")
           .in("reserva_id", reservaIds)
       : { data: [] };
 

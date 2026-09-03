@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Cliente } from "@/lib/types";
 
 export interface GrupoInfo {
@@ -28,6 +29,8 @@ export function SeatDetailModal({
   precioTotal,
   grupo,
   accent,
+  servicioId,
+  reservaPasajeroId,
   onClose,
   onMarcarPagado,
   onDescargarBoleto,
@@ -38,6 +41,8 @@ export function SeatDetailModal({
   precioTotal: number;
   grupo: GrupoInfo | null;
   accent: string;
+  servicioId: string;
+  reservaPasajeroId: string;
   onClose: () => void;
   onMarcarPagado: () => void;
   onDescargarBoleto: () => void;
@@ -136,6 +141,13 @@ export function SeatDetailModal({
             </div>
           </>
         )}
+
+        <Link
+          href={`/servicios/${servicioId}/pasajero/${reservaPasajeroId}`}
+          className="mt-[22px] block w-full rounded-lg border border-[#F8C6C6] px-3.5 py-2.5 text-center text-xs font-bold text-[#B91C1C]"
+        >
+          Cancelar / reprogramar
+        </Link>
       </div>
     </div>
   );

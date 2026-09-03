@@ -47,7 +47,11 @@ export default async function ReportesPage() {
 
   const { data: rpData } =
     asientoIds.length > 0
-      ? await supabase.from("reserva_pasajeros").select("id, asiento_id, cliente_id, precio").in("asiento_id", asientoIds)
+      ? await supabase
+          .from("reserva_pasajeros")
+          .select("id, asiento_id, cliente_id, precio")
+          .eq("estado", "activo")
+          .in("asiento_id", asientoIds)
       : { data: [] };
   const rps = rpData ?? [];
   const rpIds = rps.map((rp) => rp.id);

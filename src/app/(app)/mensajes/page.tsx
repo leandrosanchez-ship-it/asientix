@@ -44,7 +44,8 @@ export default async function MensajesPage() {
   // ── Saldo pendiente: mismo join que Cobros ──────────────────────────
   const { data: rpData } = await supabase
     .from("reserva_pasajeros")
-    .select("id, asiento_id, cliente_id, precio");
+    .select("id, asiento_id, cliente_id, precio")
+    .eq("estado", "activo");
   const rps = rpData ?? [];
   const rpIds = rps.map((rp) => rp.id);
   const asientoIds = [...new Set(rps.map((rp) => rp.asiento_id))];
@@ -120,7 +121,11 @@ export default async function MensajesPage() {
 
   const { data: rpManana } =
     asientoMananaIds.length > 0
-      ? await supabase.from("reserva_pasajeros").select("asiento_id, cliente_id").in("asiento_id", asientoMananaIds)
+      ? await supabase
+          .from("reserva_pasajeros")
+          .select("asiento_id, cliente_id")
+          .eq("estado", "activo")
+          .in("asiento_id", asientoMananaIds)
       : { data: [] };
   const clienteMananaIds = [...new Set((rpManana ?? []).map((rp) => rp.cliente_id))];
   const { data: clientesManana } =

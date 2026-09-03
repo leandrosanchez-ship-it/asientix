@@ -15,7 +15,11 @@ export default async function ClientesPage() {
 
   const { data: rpData } =
     clienteIds.length > 0
-      ? await supabase.from("reserva_pasajeros").select("cliente_id, reserva_id").in("cliente_id", clienteIds)
+      ? await supabase
+          .from("reserva_pasajeros")
+          .select("cliente_id, reserva_id")
+          .eq("estado", "activo")
+          .in("cliente_id", clienteIds)
       : { data: [] };
 
   const reservaIds = [...new Set((rpData ?? []).map((rp) => rp.reserva_id))];

@@ -363,6 +363,8 @@ export function MapaAsientosClient({
           precioTotal={modalRP.precio}
           grupo={grupoDe(modalNumero!)}
           accent={ACCENT}
+          servicioId={servicio.id}
+          reservaPasajeroId={modalRP.id}
           onClose={() => setModalNumero(null)}
           onMarcarPagado={() => onMarcarPagado(modalNumero!)}
           onDescargarBoleto={() => onDescargarBoleto(modalNumero!)}

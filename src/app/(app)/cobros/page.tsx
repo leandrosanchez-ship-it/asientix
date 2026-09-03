@@ -17,7 +17,8 @@ export default async function CobrosPage() {
 
   const { data: rpData } = await supabase
     .from("reserva_pasajeros")
-    .select("id, asiento_id, cliente_id, precio, reserva_id, reservas(servicio_id)");
+    .select("id, asiento_id, cliente_id, precio, reserva_id, reservas(servicio_id)")
+    .eq("estado", "activo");
 
   const rps = rpData ?? [];
   const rpIds = rps.map((rp) => rp.id);

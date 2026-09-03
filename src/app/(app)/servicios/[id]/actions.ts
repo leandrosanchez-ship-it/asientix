@@ -87,6 +87,15 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
     .in("id", input.asientoIds);
   if (asientosError) throw new Error(asientosError.message);
 
+  await supabase.from("eventos_reserva").insert({
+    reserva_id: reserva.id,
+    usuario_id: usuario.id,
+    accion: "creada",
+    detalle: {
+      pasajeros: input.forms.map((f) => `${f.apellido}, ${f.nombre}`),
+    },
+  });
+
   revalidatePath(`/servicios/${input.servicioId}`);
   revalidatePath("/salidas");
 
@@ -114,6 +123,20 @@ export async function marcarPagado(input: {
 
   // Si el asiento estaba marcado como "pendiente" (seña), al saldar pasa a "ocupado".
   await supabase.from("asientos").update({ estado: "ocupado" }).eq("id", input.asientoId).eq("estado", "pendiente");
+
+  const { data: rp } = await supabase
+    .from("reserva_pasajeros")
+    .select("reserva_id")
+    .eq("id", input.reservaPasajeroId)
+    .single();
+  if (rp) {
+    await supabase.from("eventos_reserva").insert({
+      reserva_id: rp.reserva_id,
+      usuario_id: usuario.id,
+      accion: "pago_registrado",
+      detalle: { monto: input.monto },
+    });
+  }
 
   revalidatePath(`/servicios/${input.servicioId}`);
 }
