@@ -40,11 +40,16 @@ que el proyecto esté linkeado.
 
 ## Estado
 
-- ✅ Esquema de base de datos (`supabase/migrations/0001_init.sql`)
-- ✅ Auth + `/login` (Supabase Auth, coincide con el diseño de `Login.dc.html`)
-- ✅ `/salidas` y `/servicios/[id]` (Mapa de Asientos, reserva grupal con asistente) —
-  con datos de ejemplo, todavía sin Supabase conectado
-- ✅ Proyecto Vercel enlazado y conectado al repo de GitHub; dominio propio en curso
-- ⏳ Resto de las pantallas (Clientes, Alta de servicio, Proveedores, Cobros,
-  Reportes, Mensajes, Boleto, Caja diaria, Cancelaciones, Superadmin) — en
-  construcción, siguiendo la maqueta en `../mockup/pantallas/`.
+- ✅ Esquema de base de datos (`supabase/migrations/`), con `service_role` y
+  `authenticated` correctamente `GRANT`eados (ver 0002/0003 — sin esto cualquier
+  select/insert vía RLS falla en silencio pese a políticas correctas)
+- ✅ Auth + `/login` (Supabase Auth real, coincide con el diseño de `Login.dc.html`)
+- ✅ `/superadmin` — alta de agencias/usuarios reales (fuera del layout de agencia)
+- ✅ Proveedores, Nuevo servicio, Salidas, `/servicios/[id]` (Mapa de Asientos +
+  reserva grupal + marcar pagado) — **conectados a Supabase real**, verificados
+  end-to-end (crear servicio → reservar → pagar → persistido en la base)
+- ✅ Producción: `https://asientix.com.ar`, env vars reales en Vercel, deploy
+  automático en cada push a `main`
+- ⏳ Resto de las pantallas (Clientes, Cobros/Cobros pendientes, Reportes, Tareas,
+  Mensajes, Boleto real en PDF, Caja diaria, Cancelaciones) — siguiendo la maqueta
+  en `../mockup/pantallas/`.
