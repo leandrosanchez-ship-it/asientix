@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { TipoHabitacion } from "@/lib/types";
+import type { CobroInicial, MedioPago, Moneda, TipoHabitacion } from "@/lib/types";
+import { parseArsMoney } from "@/lib/format";
 
 export interface PasajeroForm {
   nombre: string;
@@ -72,25 +73,48 @@ function Field({
   );
 }
 
+const MEDIOS_PAGO: { value: MedioPago; label: string }[] = [
+  { value: "efectivo", label: "Efectivo" },
+  { value: "transferencia", label: "Transferencia" },
+  { value: "tarjeta", label: "Tarjeta de crédito" },
+];
+
 export function ReservationWizard({
   cart,
+  precioPasaje,
   tiposHabitacionDisponibles,
   onCancel,
   onFinish,
 }: {
   cart: number[];
+  precioPasaje: number;
   tiposHabitacionDisponibles: TipoHabitacion[];
   onCancel: () => void;
-  onFinish: (forms: PasajeroForm[], responsableIdx: number, habitacion: TipoHabitacion | null) => void;
+  onFinish: (
+    forms: PasajeroForm[],
+    responsableIdx: number,
+    habitacion: TipoHabitacion | null,
+    cobro: CobroInicial,
+  ) => void;
 }) {
   const [index, setIndex] = useState(0);
   const [forms, setForms] = useState<PasajeroForm[]>(cart.map(() => emptyPasajeroForm()));
   const [responsableIdx, setResponsableIdx] = useState<number | null>(0);
   const [habitacion, setHabitacion] = useState<TipoHabitacion | "">("");
 
-  const form = forms[index];
-  const isLast = index === cart.length - 1;
-  const canAdvance = !!(form.nombre && form.apellido);
+  const precioTotal = precioPasaje * cart.length;
+  const [montoAbonadoStr, setMontoAbonadoStr] = useState(() => String(precioTotal));
+  const [medioPago, setMedioPago] = useState<MedioPago>("efectivo");
+  const [moneda, setMoneda] = useState<Moneda>("ARS");
+
+  const PASO_COBRO = cart.length; // un paso más, después del último pasajero
+  const isCobroStep = index === PASO_COBRO;
+  const form = forms[Math.min(index, cart.length - 1)];
+  const isLast = index === PASO_COBRO;
+  const canAdvance = isCobroStep ? true : !!(form.nombre && form.apellido);
+
+  const montoAbonado = Math.max(0, Math.min(parseArsMoney(montoAbonadoStr), precioTotal));
+  const saldoPendiente = Math.max(precioTotal - montoAbonado, 0);
 
   function setField(field: keyof PasajeroForm, value: string) {
     setForms((prev) => {
@@ -102,12 +126,15 @@ export function ReservationWizard({
 
   function next() {
     if (!canAdvance) return;
-    setIndex((i) => Math.min(cart.length - 1, i + 1));
+    setIndex((i) => Math.min(PASO_COBRO, i + 1));
   }
 
   function finish() {
-    if (!canAdvance) return;
-    onFinish(forms, responsableIdx ?? 0, habitacion || null);
+    onFinish(forms, responsableIdx ?? 0, habitacion || null, {
+      montoAbonado,
+      medioPago,
+      moneda: medioPago === "efectivo" ? moneda : null,
+    });
   }
 
   return (
@@ -116,10 +143,10 @@ export function ReservationWizard({
         <div className="mb-1.5 flex items-start justify-between">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
-              Pasajero {index + 1} de {cart.length}
+              {isCobroStep ? "Último paso" : `Pasajero ${index + 1} de ${cart.length}`}
             </div>
             <h2 className="mt-0.5 text-[17px] font-extrabold text-ink">
-              Asiento {cart[index]}
+              {isCobroStep ? "Cobro" : `Asiento ${cart[index]}`}
             </h2>
           </div>
           <button
@@ -141,98 +168,187 @@ export function ReservationWizard({
           ))}
         </div>
 
-        <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
-          Datos básicos
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Nombre" value={form.nombre} onChange={(v) => setField("nombre", v)} placeholder="Nombre" />
-          <Field label="Apellido" value={form.apellido} onChange={(v) => setField("apellido", v)} placeholder="Apellido" />
-          <Field label="DNI" value={form.dni} onChange={(v) => setField("dni", v)} placeholder="30.123.456" />
-          <Field label="Fecha de nacimiento" value={form.nacimiento} onChange={(v) => setField("nacimiento", v)} type="date" />
-          <Field label="Teléfono" value={form.telefono} onChange={(v) => setField("telefono", v)} placeholder="351 555-0000" />
-          <Field label="Email" value={form.email} onChange={(v) => setField("email", v)} placeholder="nombre@mail.com" />
-          <Field label="Localidad" value={form.localidad} onChange={(v) => setField("localidad", v)} placeholder="Villa Carlos Paz, Córdoba" span2 />
-        </div>
-
-        <div className="mb-2.5 mt-[18px] text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
-          Contacto de emergencia
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Nombre y apellido" value={form.emerNombre} onChange={(v) => setField("emerNombre", v)} placeholder="Nombre y apellido" />
-          <Field label="Teléfono" value={form.emerTelefono} onChange={(v) => setField("emerTelefono", v)} placeholder="351 555-0000" />
-          <div className="col-span-2">
-            <div className="mb-1 text-xs text-ink-soft">Parentesco</div>
-            <select
-              value={form.emerParentesco}
-              onChange={(e) => setField("emerParentesco", e.target.value)}
-              className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
-            >
-              <option value="">Seleccionar…</option>
-              {PARENTESCOS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mb-2.5 mt-[18px] text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
-          Obra social (opcional)
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Obra social" value={form.obraSocial} onChange={(v) => setField("obraSocial", v)} placeholder="Ej. PAMI, OSDE…" />
-          <Field label="Número de afiliado" value={form.obraSocialNro} onChange={(v) => setField("obraSocialNro", v)} placeholder="Número de afiliado" />
-        </div>
-
-        <div className="mt-[18px] rounded-[10px] border border-line p-3.5">
-          <button
-            type="button"
-            onClick={() => setResponsableIdx((prev) => (prev === index ? null : index))}
-            className="flex w-full items-center gap-2.5 text-left"
-          >
-            <span
-              className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full"
-              style={
-                responsableIdx === index
-                  ? { background: "#2563EB" }
-                  : { border: "1.5px solid #C7CBD1" }
-              }
-            >
-              {responsableIdx === index && (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              )}
-            </span>
-            <span className="text-[13px] font-semibold text-ink">Es el responsable de la reserva</span>
-          </button>
-          <div className="ml-7 mt-1.5 text-[11.5px] text-ink-faint">
-            Se emite un solo voucher a nombre del responsable, cubriendo los {cart.length} asientos.
-          </div>
-        </div>
-
-        {tiposHabitacionDisponibles.length > 0 && (
-          <div className="mt-3 rounded-[10px] border border-line p-3.5">
-            <div className="mb-2 text-[13px] font-semibold text-ink">
-              Hotel incluido — tipo de habitación (opcional)
+        {!isCobroStep ? (
+          <>
+            <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
+              Datos básicos
             </div>
-            <select
-              value={habitacion}
-              onChange={(e) => setHabitacion(e.target.value as TipoHabitacion | "")}
-              className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
-            >
-              <option value="">Sin hotel / no aplica</option>
-              {HABITACIONES.filter((h) => tiposHabitacionDisponibles.includes(h.value)).map((h) => (
-                <option key={h.value} value={h.value}>
-                  {h.label}
-                </option>
-              ))}
-            </select>
-            <div className="mt-1.5 text-[11.5px] text-ink-faint">
-              Se comparte entre todos los asientos de esta reserva y figura en el voucher.
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nombre" value={form.nombre} onChange={(v) => setField("nombre", v)} placeholder="Nombre" />
+              <Field label="Apellido" value={form.apellido} onChange={(v) => setField("apellido", v)} placeholder="Apellido" />
+              <Field label="DNI" value={form.dni} onChange={(v) => setField("dni", v)} placeholder="30.123.456" />
+              <Field label="Fecha de nacimiento" value={form.nacimiento} onChange={(v) => setField("nacimiento", v)} type="date" />
+              <Field label="Teléfono" value={form.telefono} onChange={(v) => setField("telefono", v)} placeholder="351 555-0000" />
+              <Field label="Email" value={form.email} onChange={(v) => setField("email", v)} placeholder="nombre@mail.com" />
+              <Field label="Localidad" value={form.localidad} onChange={(v) => setField("localidad", v)} placeholder="Villa Carlos Paz, Córdoba" span2 />
             </div>
-          </div>
+
+            <div className="mb-2.5 mt-[18px] text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
+              Contacto de emergencia
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nombre y apellido" value={form.emerNombre} onChange={(v) => setField("emerNombre", v)} placeholder="Nombre y apellido" />
+              <Field label="Teléfono" value={form.emerTelefono} onChange={(v) => setField("emerTelefono", v)} placeholder="351 555-0000" />
+              <div className="col-span-2">
+                <div className="mb-1 text-xs text-ink-soft">Parentesco</div>
+                <select
+                  value={form.emerParentesco}
+                  onChange={(e) => setField("emerParentesco", e.target.value)}
+                  className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                >
+                  <option value="">Seleccionar…</option>
+                  {PARENTESCOS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mb-2.5 mt-[18px] text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
+              Obra social (opcional)
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Obra social" value={form.obraSocial} onChange={(v) => setField("obraSocial", v)} placeholder="Ej. PAMI, OSDE…" />
+              <Field label="Número de afiliado" value={form.obraSocialNro} onChange={(v) => setField("obraSocialNro", v)} placeholder="Número de afiliado" />
+            </div>
+
+            <div className="mt-[18px] rounded-[10px] border border-line p-3.5">
+              <button
+                type="button"
+                onClick={() => setResponsableIdx((prev) => (prev === index ? null : index))}
+                className="flex w-full items-center gap-2.5 text-left"
+              >
+                <span
+                  className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full"
+                  style={
+                    responsableIdx === index
+                      ? { background: "#2563EB" }
+                      : { border: "1.5px solid #C7CBD1" }
+                  }
+                >
+                  {responsableIdx === index && (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  )}
+                </span>
+                <span className="text-[13px] font-semibold text-ink">Es el responsable de la reserva</span>
+              </button>
+              <div className="ml-7 mt-1.5 text-[11.5px] text-ink-faint">
+                Se emite un solo voucher a nombre del responsable, cubriendo los {cart.length} asientos.
+              </div>
+            </div>
+
+            {tiposHabitacionDisponibles.length > 0 && (
+              <div className="mt-3 rounded-[10px] border border-line p-3.5">
+                <div className="mb-2 text-[13px] font-semibold text-ink">
+                  Hotel incluido — tipo de habitación (opcional)
+                </div>
+                <select
+                  value={habitacion}
+                  onChange={(e) => setHabitacion(e.target.value as TipoHabitacion | "")}
+                  className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                >
+                  <option value="">Sin hotel / no aplica</option>
+                  {HABITACIONES.filter((h) => tiposHabitacionDisponibles.includes(h.value)).map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="mt-1.5 text-[11.5px] text-ink-faint">
+                  Se comparte entre todos los asientos de esta reserva y figura en el voucher.
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wide text-[#2563EB]">
+              ¿Cómo se abona?
+            </div>
+
+            <div className="rounded-[10px] border border-line bg-[#F7F8F7] p-3.5">
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="text-ink-soft">Precio total ({cart.length} {cart.length === 1 ? "pasaje" : "pasajes"})</span>
+                <span className="font-bold text-ink">${precioTotal.toLocaleString("es-AR")}</span>
+              </div>
+            </div>
+
+            <div className="mt-3.5">
+              <div className="mb-1 text-xs text-ink-soft">Monto abonado ahora</div>
+              <input
+                value={montoAbonadoStr}
+                onChange={(e) => setMontoAbonadoStr(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+              />
+            </div>
+
+            <div className="mt-3.5">
+              <div className="mb-1 text-xs text-ink-soft">Medio de pago</div>
+              <div className="flex gap-2">
+                {MEDIOS_PAGO.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setMedioPago(m.value)}
+                    style={
+                      medioPago === m.value
+                        ? { background: "#2563EB", borderColor: "#2563EB", color: "#fff" }
+                        : { borderColor: "#E3E5EA", color: "#6B7280" }
+                    }
+                    className="flex-1 rounded-[9px] border px-2.5 py-2.5 text-[12.5px] font-bold"
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {medioPago === "efectivo" && (
+              <div className="mt-3.5">
+                <div className="mb-1 text-xs text-ink-soft">Moneda</div>
+                <div className="flex gap-2">
+                  {(["ARS", "USD"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMoneda(m)}
+                      style={
+                        moneda === m
+                          ? { background: "#2563EB", borderColor: "#2563EB", color: "#fff" }
+                          : { borderColor: "#E3E5EA", color: "#6B7280" }
+                      }
+                      className="flex-1 rounded-[9px] border px-2.5 py-2.5 text-[12.5px] font-bold"
+                    >
+                      {m === "ARS" ? "Pesos (ARS)" : "Dólares (USD)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div
+              className="mt-[18px] rounded-[10px] px-4 py-3.5"
+              style={{
+                background: saldoPendiente > 0 ? "#FEF3C7" : "#DCFCE7",
+                border: `1px solid ${saldoPendiente > 0 ? "#FBE0A0" : "#BBF0CE"}`,
+              }}
+            >
+              <div
+                className="text-[11px] font-bold uppercase"
+                style={{ color: saldoPendiente > 0 ? "#92400E" : "#15803D" }}
+              >
+                {saldoPendiente > 0 ? "Queda saldo pendiente" : "Se paga en su totalidad"}
+              </div>
+              <div className="mt-0.5 text-sm font-extrabold" style={{ color: saldoPendiente > 0 ? "#92400E" : "#15803D" }}>
+                ${saldoPendiente.toLocaleString("es-AR")}
+              </div>
+            </div>
+          </>
         )}
 
         <div className="mt-[26px] flex justify-between gap-2.5">

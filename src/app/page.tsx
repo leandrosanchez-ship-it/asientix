@@ -8,5 +8,7 @@ export default async function Home() {
     redirect("/login");
   }
 
-  redirect(usuario.rol === "superadmin" ? "/superadmin" : "/salidas");
+  // /tareas resuelve el permiso solo (requirePantalla redirige a la primera
+  // pantalla habilitada si el usuario no tiene acceso a tareas).
+  redirect(usuario.rol === "superadmin" ? "/superadmin" : "/tareas");
 }

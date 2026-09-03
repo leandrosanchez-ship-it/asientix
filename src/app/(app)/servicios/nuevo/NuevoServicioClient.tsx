@@ -4,9 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { AsistenciaViajero, Hotel, Observacion, TipoHabitacion } from "@/lib/types";
 import { crearServicio } from "./actions";
+import { crearHotel, crearAsistencia } from "../../proveedores/actions";
+
+const NUEVO = "__nuevo__";
 
 const ACCENT = "#2E6E8E";
-const TIPOS_COCHE = ["Comun", "Semi-Cama", "Cama", "Ejecutivo"];
+const TIPOS_COCHE = ["Semi-Cama", "Cama", "Ambos"];
 const HABITACIONES: { value: TipoHabitacion; label: string }[] = [
   { value: "single", label: "Single" },
   { value: "doble", label: "Doble" },
@@ -116,6 +119,17 @@ export function NuevoServicioClient({
   const [saved, setSaved] = useState(false);
   const [nuevoServicioId, setNuevoServicioId] = useState<string | null>(null);
 
+  // Copias locales de las listas de Proveedores — para que un hotel/asistencia
+  // cargado al vuelo aparezca al toque en el <select>, sin recargar la página.
+  const [hotelesLocal, setHotelesLocal] = useState(hoteles);
+  const [asistenciasLocal, setAsistenciasLocal] = useState(asistencias);
+  const [nuevoHotel, setNuevoHotel] = useState({ nombre: "", telefono: "" });
+  const [nuevaAsistencia, setNuevaAsistencia] = useState({ nombre: "", telefono: "" });
+  const [creandoProveedor, setCreandoProveedor] = useState(false);
+  const [proveedorError, setProveedorError] = useState<string | null>(null);
+  const [mostrarNuevoHotel, setMostrarNuevoHotel] = useState(false);
+  const [mostrarNuevaAsistencia, setMostrarNuevaAsistencia] = useState(false);
+
   function setField<K extends keyof Form>(field: K, value: Form[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -128,6 +142,44 @@ export function NuevoServicioClient({
     setSelectedHab((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
   }
 
+  function guardarNuevoHotel() {
+    if (!nuevoHotel.nombre.trim()) return;
+    setProveedorError(null);
+    setCreandoProveedor(true);
+    startTransition(async () => {
+      try {
+        const id = await crearHotel({ nombre: nuevoHotel.nombre, contacto: "", telefono: nuevoHotel.telefono });
+        setHotelesLocal((prev) => [...prev, { id, agenciaId: "", nombre: nuevoHotel.nombre.trim(), contacto: "", telefono: nuevoHotel.telefono }]);
+        setField("hotelId", id);
+        setNuevoHotel({ nombre: "", telefono: "" });
+        setMostrarNuevoHotel(false);
+      } catch (e) {
+        setProveedorError(e instanceof Error ? e.message : "No se pudo crear el hotel");
+      } finally {
+        setCreandoProveedor(false);
+      }
+    });
+  }
+
+  function guardarNuevaAsistencia() {
+    if (!nuevaAsistencia.nombre.trim()) return;
+    setProveedorError(null);
+    setCreandoProveedor(true);
+    startTransition(async () => {
+      try {
+        const id = await crearAsistencia({ nombre: nuevaAsistencia.nombre, contacto: "", telefono: nuevaAsistencia.telefono });
+        setAsistenciasLocal((prev) => [...prev, { id, agenciaId: "", nombre: nuevaAsistencia.nombre.trim(), contacto: "", telefono: nuevaAsistencia.telefono }]);
+        setField("asistenciaId", id);
+        setNuevaAsistencia({ nombre: "", telefono: "" });
+        setMostrarNuevaAsistencia(false);
+      } catch (e) {
+        setProveedorError(e instanceof Error ? e.message : "No se pudo crear la asistencia");
+      } finally {
+        setCreandoProveedor(false);
+      }
+    });
+  }
+
   function reset() {
     setForm(emptyForm());
     setIncluyeHotel(false);
@@ -137,9 +189,14 @@ export function NuevoServicioClient({
     setSaved(false);
     setNuevoServicioId(null);
     setError(null);
+    setMostrarNuevoHotel(false);
+    setMostrarNuevaAsistencia(false);
+    setNuevoHotel({ nombre: "", telefono: "" });
+    setNuevaAsistencia({ nombre: "", telefono: "" });
+    setProveedorError(null);
   }
 
-  const canSave = !!(form.destino && form.fecha);
+  const canSave = !!(form.destino && form.fecha && form.precio.trim());
 
   function save() {
     if (!canSave) return;
@@ -200,7 +257,7 @@ export function NuevoServicioClient({
             >
               {TIPOS_COCHE.map((t) => (
                 <option key={t} value={t}>
-                  {t === "Comun" ? "Común" : t}
+                  {t}
                 </option>
               ))}
             </select>
@@ -225,17 +282,69 @@ export function NuevoServicioClient({
             {incluyeHotel && (
               <>
                 <select
-                  value={form.hotelId}
-                  onChange={(e) => setField("hotelId", e.target.value)}
+                  value={mostrarNuevoHotel ? NUEVO : form.hotelId}
+                  onChange={(e) => {
+                    if (e.target.value === NUEVO) {
+                      setMostrarNuevoHotel(true);
+                      setField("hotelId", "");
+                    } else {
+                      setMostrarNuevoHotel(false);
+                      setField("hotelId", e.target.value);
+                    }
+                  }}
                   className="mt-2.5 w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
                 >
                   <option value="">Seleccionar hotel…</option>
-                  {hoteles.map((h) => (
+                  {hotelesLocal.map((h) => (
                     <option key={h.id} value={h.id}>
                       {h.nombre}
                     </option>
                   ))}
+                  <option value={NUEVO}>+ Agregar nuevo hotel…</option>
                 </select>
+
+                {mostrarNuevoHotel && (
+                  <div className="mt-2.5 flex flex-col gap-2 rounded-lg border border-dashed border-[#C7CBD1] p-3">
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                      Nuevo hotel — queda guardado en Proveedores
+                    </div>
+                    <input
+                      value={nuevoHotel.nombre}
+                      onChange={(e) => setNuevoHotel((p) => ({ ...p, nombre: e.target.value }))}
+                      placeholder="Nombre del hotel"
+                      className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                    />
+                    <input
+                      value={nuevoHotel.telefono}
+                      onChange={(e) => setNuevoHotel((p) => ({ ...p, telefono: e.target.value }))}
+                      placeholder="Teléfono de contacto (opcional)"
+                      className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                    />
+                    {proveedorError && <div className="text-xs font-semibold text-red-600">{proveedorError}</div>}
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMostrarNuevoHotel(false);
+                          setNuevoHotel({ nombre: "", telefono: "" });
+                        }}
+                        className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={guardarNuevoHotel}
+                        disabled={!nuevoHotel.nombre.trim() || creandoProveedor}
+                        style={{ background: ACCENT }}
+                        className="rounded-lg px-3.5 py-1.5 text-xs font-bold text-white disabled:opacity-55"
+                      >
+                        {creandoProveedor ? "Guardando…" : "Agregar y usar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-3">
                   <div className="mb-1.5 text-xs text-ink-soft">
                     Tipos de habitación disponibles para esta salida
@@ -285,18 +394,71 @@ export function NuevoServicioClient({
               <span className="text-[13px] font-semibold text-ink">¿Incluye asistencia al viajero?</span>
             </button>
             {incluyeAsistencia && (
-              <select
-                value={form.asistenciaId}
-                onChange={(e) => setField("asistenciaId", e.target.value)}
-                className="mt-2.5 w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
-              >
-                <option value="">Seleccionar asistencia…</option>
-                {asistencias.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.nombre}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={mostrarNuevaAsistencia ? NUEVO : form.asistenciaId}
+                  onChange={(e) => {
+                    if (e.target.value === NUEVO) {
+                      setMostrarNuevaAsistencia(true);
+                      setField("asistenciaId", "");
+                    } else {
+                      setMostrarNuevaAsistencia(false);
+                      setField("asistenciaId", e.target.value);
+                    }
+                  }}
+                  className="mt-2.5 w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                >
+                  <option value="">Seleccionar asistencia…</option>
+                  {asistenciasLocal.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nombre}
+                    </option>
+                  ))}
+                  <option value={NUEVO}>+ Agregar nueva asistencia…</option>
+                </select>
+
+                {mostrarNuevaAsistencia && (
+                  <div className="mt-2.5 flex flex-col gap-2 rounded-lg border border-dashed border-[#C7CBD1] p-3">
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                      Nueva asistencia — queda guardada en Proveedores
+                    </div>
+                    <input
+                      value={nuevaAsistencia.nombre}
+                      onChange={(e) => setNuevaAsistencia((p) => ({ ...p, nombre: e.target.value }))}
+                      placeholder="Nombre de la empresa de asistencia"
+                      className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                    />
+                    <input
+                      value={nuevaAsistencia.telefono}
+                      onChange={(e) => setNuevaAsistencia((p) => ({ ...p, telefono: e.target.value }))}
+                      placeholder="Teléfono de contacto (opcional)"
+                      className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                    />
+                    {proveedorError && <div className="text-xs font-semibold text-red-600">{proveedorError}</div>}
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMostrarNuevaAsistencia(false);
+                          setNuevaAsistencia({ nombre: "", telefono: "" });
+                        }}
+                        className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={guardarNuevaAsistencia}
+                        disabled={!nuevaAsistencia.nombre.trim() || creandoProveedor}
+                        style={{ background: ACCENT }}
+                        className="rounded-lg px-3.5 py-1.5 text-xs font-bold text-white disabled:opacity-55"
+                      >
+                        {creandoProveedor ? "Guardando…" : "Agregar y usar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

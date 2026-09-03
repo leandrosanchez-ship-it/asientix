@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Pantalla, Usuario } from "@/lib/types";
+import { LogoutButton } from "./LogoutButton";
 
 const TABS: { pantalla: Pantalla; label: string; href: string }[] = [
   { pantalla: "salidas", label: "Salidas", href: "/salidas" },
@@ -48,12 +49,7 @@ export function NavBar({ usuario }: { usuario: Usuario }) {
       </nav>
       <div className="flex items-center gap-3">
         <span className="text-[12px] text-ink-soft">{usuario.nombre}</span>
-        <Link
-          href="/login"
-          className="rounded-lg border border-line px-3 py-1.5 text-[11px] font-semibold text-ink-soft hover:bg-app"
-        >
-          Salir
-        </Link>
+        <LogoutButton className="rounded-lg border border-line px-3 py-1.5 text-[11px] font-semibold text-ink-soft hover:bg-app" />
       </div>
     </div>
   );

@@ -115,7 +115,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
           .in("id", clienteIds)
       : Promise.resolve({ data: [] }),
     rpIds.length > 0
-      ? supabase.from("pagos").select("id, reserva_pasajero_id, monto, medio_pago, fecha").in("reserva_pasajero_id", rpIds)
+      ? supabase.from("pagos").select("id, reserva_pasajero_id, monto, medio_pago, moneda, fecha").in("reserva_pasajero_id", rpIds)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -141,6 +141,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
     reservaPasajeroId: p.reserva_pasajero_id,
     monto: Number(p.monto),
     medioPago: p.medio_pago,
+    moneda: p.moneda,
     fecha: p.fecha,
   }));
 

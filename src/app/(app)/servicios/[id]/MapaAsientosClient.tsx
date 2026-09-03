@@ -5,6 +5,7 @@ import type {
   Asiento,
   AsistenciaViajero,
   Cliente,
+  CobroInicial,
   Hotel,
   Observacion,
   Pago,
@@ -19,6 +20,8 @@ import { ReservationWizard, type PasajeroForm } from "./ReservationWizard";
 import { SeatDetailModal, habitacionLabel, type GrupoInfo } from "./SeatDetailModal";
 import { crearReservaGrupal, marcarPagado as marcarPagadoAction } from "./actions";
 import { descargarBoletoPdf } from "@/lib/descargar-boleto";
+import { Toast } from "@/components/Toast";
+import { limpiarDni, formatTelefonoWhatsapp } from "@/lib/format";
 
 const ACCENT = "#2E6E8E";
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -121,7 +124,12 @@ export function MapaAsientosClient({
     }
   }
 
-  function onWizardFinish(forms: PasajeroForm[], responsableIdx: number, habitacionTipo: TipoHabitacion | null) {
+  function onWizardFinish(
+    forms: PasajeroForm[],
+    responsableIdx: number,
+    habitacionTipo: TipoHabitacion | null,
+    cobro: CobroInicial,
+  ) {
     const reservaId = nextId("reserva");
     const codigoValidacion = `AXT-${slug(servicio.destino).slice(0, 3).toUpperCase()}${servicio.fecha.replace(/-/g, "")}-${nextId("").slice(-5).toUpperCase()}`;
 
@@ -133,31 +141,68 @@ export function MapaAsientosClient({
       codigoValidacion,
     };
 
+    // El cobro es uno solo por toda la reserva grupal — se reparte
+    // proporcionalmente entre los pasajeros (todos con el mismo precio en la
+    // práctica), con el resto del redondeo cargado al último para que la
+    // suma cierre exacto contra `cobro.montoAbonado`.
+    const precioTotalGrupo = servicio.precioPasaje * cart.length;
+    const saldoTotal = Math.max(precioTotalGrupo - cobro.montoAbonado, 0);
+    const estadoAsiento: "ocupado" | "pendiente" = saldoTotal > 0 ? "pendiente" : "ocupado";
+
     const nuevosClientes: Cliente[] = [];
     const nuevosRP: ReservaPasajero[] = [];
+    const nuevosPagos: Pago[] = [];
     const asientoIds: string[] = [];
+    let montoRepartido = 0;
 
     cart.forEach((numero, idx) => {
       const form = forms[idx];
       const asiento = seatsByNumero.get(numero)!.asiento;
       const clienteId = nextId("cliente");
+      const rpId = nextId("rp");
       asientoIds.push(asiento.id);
-      nuevosClientes.push({ id: clienteId, agenciaId: servicio.agenciaId, ...form });
+      nuevosClientes.push({
+        id: clienteId,
+        agenciaId: servicio.agenciaId,
+        ...form,
+        dni: limpiarDni(form.dni),
+        telefono: form.telefono ? formatTelefonoWhatsapp(form.telefono) : "",
+        emerTelefono: form.emerTelefono ? formatTelefonoWhatsapp(form.emerTelefono) : "",
+      });
       nuevosRP.push({
-        id: nextId("rp"),
+        id: rpId,
         reservaId,
         asientoId: asiento.id,
         clienteId,
         esResponsable: idx === responsableIdx,
         precio: servicio.precioPasaje,
       });
+
+      if (cobro.montoAbonado > 0) {
+        const esUltimo = idx === cart.length - 1;
+        const montoPasajero = esUltimo
+          ? Math.round((cobro.montoAbonado - montoRepartido) * 100) / 100
+          : Math.round((cobro.montoAbonado / cart.length) * 100) / 100;
+        montoRepartido += montoPasajero;
+        if (montoPasajero > 0) {
+          nuevosPagos.push({
+            id: nextId("pago"),
+            reservaPasajeroId: rpId,
+            monto: montoPasajero,
+            medioPago: cobro.medioPago,
+            moneda: cobro.moneda,
+            fecha: new Date().toISOString(),
+          });
+        }
+      }
     });
 
     setClientes((prev) => [...prev, ...nuevosClientes]);
     setReservas((prev) => [...prev, nuevaReserva]);
     setReservaPasajeros((prev) => [...prev, ...nuevosRP]);
+    setPagos((prev) => [...prev, ...nuevosPagos]);
     setAsientos((prev) =>
-      prev.map((a) => (cart.includes(a.numero) ? { ...a, estado: "ocupado" } : a)),
+      prev.map((a) => (cart.includes(a.numero) ? { ...a, estado: estadoAsiento } : a)),
     );
 
     setCart([]);
@@ -174,6 +219,7 @@ export function MapaAsientosClient({
       habitacionTipo,
       precioPasaje: servicio.precioPasaje,
       codigoValidacion,
+      cobro,
     })
       .then((real) => {
         // Reemplaza los IDs optimistas (locales) por los reales de Supabase,
@@ -194,6 +240,12 @@ export function MapaAsientosClient({
             return { ...rp, id: real.reservaPasajeroIds[i], reservaId: real.reservaId, clienteId: real.clienteIds[i] };
           }),
         );
+        setPagos((prev) =>
+          prev.map((p) => {
+            const i = rpIdsOptimistas.indexOf(p.reservaPasajeroId);
+            return i === -1 ? p : { ...p, reservaPasajeroId: real.reservaPasajeroIds[i] };
+          }),
+        );
       })
       .catch((e) => {
         setToast(`✕ No se pudo guardar la reserva en el servidor: ${e instanceof Error ? e.message : "error"}`);
@@ -209,7 +261,7 @@ export function MapaAsientosClient({
 
     setPagos((prev) => [
       ...prev,
-      { id: nextId("pago"), reservaPasajeroId: rp.id, monto: saldo, medioPago: "efectivo", fecha: new Date().toISOString() },
+      { id: nextId("pago"), reservaPasajeroId: rp.id, monto: saldo, medioPago: "efectivo", moneda: null, fecha: new Date().toISOString() },
     ]);
     setAsientos((prev) =>
       prev.map((a) => (a.numero === numero && a.estado === "pendiente" ? { ...a, estado: "ocupado" } : a)),
@@ -295,11 +347,7 @@ export function MapaAsientosClient({
         </div>
       </div>
 
-      {toast && (
-        <div className="mx-8 mt-4 rounded-[10px] border border-[#BBF0CE] bg-[#DCFCE7] px-4 py-3 text-xs font-bold text-[#15803D]">
-          {toast}
-        </div>
-      )}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       {cart.length > 0 && (
         <div className="flex items-center justify-between bg-[#1C1F27] px-8 py-3.5 text-white">
@@ -347,6 +395,7 @@ export function MapaAsientosClient({
       {wizardOpen && (
         <ReservationWizard
           cart={cart}
+          precioPasaje={servicio.precioPasaje}
           tiposHabitacionDisponibles={servicio.incluyeHotel ? servicio.tiposHabitacionDisponibles : []}
           onCancel={() => setWizardOpen(false)}
           onFinish={onWizardFinish}

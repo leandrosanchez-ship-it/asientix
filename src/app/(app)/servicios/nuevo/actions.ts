@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import { SUPERIOR_IDS, INFERIOR_IDS } from "@/lib/mock-data";
+import { parseArsMoney } from "@/lib/format";
 import type { TipoHabitacion } from "@/lib/types";
 
 export interface CrearServicioInput {
@@ -28,6 +29,10 @@ export async function crearServicio(input: CrearServicioInput) {
   if (!input.destino.trim() || !input.fecha) {
     throw new Error("Destino y fecha son obligatorios");
   }
+  const precioPasaje = parseArsMoney(input.precioPasaje);
+  if (precioPasaje <= 0) {
+    throw new Error("El precio del pasaje tiene que ser mayor a 0");
+  }
 
   const supabase = await createClient();
 
@@ -41,7 +46,7 @@ export async function crearServicio(input: CrearServicioInput) {
       hora: input.hora || "00:00",
       tipo_coche: input.tipoCoche,
       unidad: input.unidad.trim() || null,
-      precio_pasaje: Number(input.precioPasaje.replace(/[^\d.]/g, "")) || 0,
+      precio_pasaje: precioPasaje,
       incluye_hotel: input.incluyeHotel,
       hotel_id: input.incluyeHotel && input.hotelId ? input.hotelId : null,
       tipos_habitacion_disponibles: input.incluyeHotel ? input.tiposHabitacionDisponibles : [],

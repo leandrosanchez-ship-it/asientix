@@ -156,12 +156,15 @@ export default async function MensajesPage() {
     .filter((r): r is Recipient => r !== null);
 
   // ── Cumpleaños / Promociones: base de clientes con edad ─────────────
-  const { data: todosClientes } = await supabase.from("clientes").select("nombre, apellido, telefono, nacimiento");
+  const { data: todosClientes } = await supabase
+    .from("clientes")
+    .select("nombre, apellido, telefono, email, nacimiento");
   const clientesConEdad = (todosClientes ?? [])
     .filter((c) => !!c.telefono)
     .map((c) => ({
       display: `${c.apellido}, ${c.nombre}`,
       telefono: c.telefono as string,
+      email: c.email || null,
       edad: edadDe(c.nacimiento),
       data: { nombre: c.nombre },
     }));

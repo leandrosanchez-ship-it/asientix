@@ -4,6 +4,15 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { registrarPago } from "./actions";
 import { descargarBoletoPdf } from "@/lib/descargar-boleto";
+import { Toast } from "@/components/Toast";
+import { digitsWhatsapp } from "@/lib/format";
+import type { MedioPago, Moneda } from "@/lib/types";
+
+const MEDIOS_PAGO: { value: MedioPago; label: string }[] = [
+  { value: "efectivo", label: "Efectivo" },
+  { value: "transferencia", label: "Transferencia" },
+  { value: "tarjeta", label: "Tarjeta" },
+];
 
 const ACCENT = "#2E6E8E";
 
@@ -25,8 +34,7 @@ function fmt(n: number) {
 
 function waLink(nombre: string, telefono: string, saldo: number, servicio: string) {
   const mensaje = `Hola ${nombre}! Te escribimos de tu agencia para recordarte que tenés un saldo pendiente de ${fmt(saldo)} por tu pasaje (${servicio}). Cualquier consulta, quedamos a disposición. ¡Gracias!`;
-  const digits = telefono.replace(/\D/g, "");
-  return `https://wa.me/549${digits}?text=${encodeURIComponent(mensaje)}`;
+  return `https://wa.me/${digitsWhatsapp(telefono)}?text=${encodeURIComponent(mensaje)}`;
 }
 
 export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }) {
@@ -37,6 +45,8 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
   const [query, setQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [montoInputs, setMontoInputs] = useState<Record<string, string>>({});
+  const [medioInputs, setMedioInputs] = useState<Record<string, MedioPago>>({});
+  const [monedaInputs, setMonedaInputs] = useState<Record<string, Moneda>>({});
   const [pagadas, setPagadas] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,10 +63,12 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
     const monto = parseFloat(montoInputs[fila.id] ?? "");
     if (!monto || monto <= 0) return;
     setError(null);
+    const medioPago = medioInputs[fila.id] ?? "efectivo";
+    const moneda = monedaInputs[fila.id] ?? "ARS";
 
     startTransition(async () => {
       try {
-        await registrarPago({ reservaPasajeroId: fila.id, monto });
+        await registrarPago({ reservaPasajeroId: fila.id, monto, medioPago, moneda: medioPago === "efectivo" ? moneda : null });
         setFilas((prev) =>
           prev.map((f) => {
             if (f.id !== fila.id) return f;
@@ -112,11 +124,7 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
         </div>
       </div>
 
-      {toast && (
-        <div className="mx-8 mt-4 rounded-[10px] border border-[#BBF0CE] bg-[#DCFCE7] px-4 py-3 text-xs font-bold text-[#15803D]">
-          {toast}
-        </div>
-      )}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       {error && (
         <div className="mx-8 mt-4 rounded-[10px] border border-[#F8C6C6] bg-[#FEE2E2] px-4 py-3 text-xs font-bold text-[#B91C1C]">
           {error}
@@ -185,13 +193,34 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
                   </div>
                 </div>
                 {isExpanded && (
-                  <div className="flex items-center gap-2 border-b border-[#EEF0F2] bg-[#FBFBFA] px-5 py-3.5">
+                  <div className="flex flex-wrap items-center gap-2 border-b border-[#EEF0F2] bg-[#FBFBFA] px-5 py-3.5">
                     <input
                       value={montoInputs[fila.id] ?? ""}
                       onChange={(e) => setMontoInputs((prev) => ({ ...prev, [fila.id]: e.target.value }))}
                       placeholder="Monto a registrar"
-                      className="w-[220px] rounded-lg border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
+                      className="w-[180px] rounded-lg border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
                     />
+                    <select
+                      value={medioInputs[fila.id] ?? "efectivo"}
+                      onChange={(e) => setMedioInputs((prev) => ({ ...prev, [fila.id]: e.target.value as MedioPago }))}
+                      className="rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                    >
+                      {MEDIOS_PAGO.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    {(medioInputs[fila.id] ?? "efectivo") === "efectivo" && (
+                      <select
+                        value={monedaInputs[fila.id] ?? "ARS"}
+                        onChange={(e) => setMonedaInputs((prev) => ({ ...prev, [fila.id]: e.target.value as Moneda }))}
+                        className="rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                      >
+                        <option value="ARS">Pesos (ARS)</option>
+                        <option value="USD">Dólares (USD)</option>
+                      </select>
+                    )}
                     <button
                       onClick={() => registrar(fila)}
                       disabled={isPending}

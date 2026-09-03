@@ -3,8 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
+import type { MedioPago, Moneda } from "@/lib/types";
 
-export async function registrarPago(input: { reservaPasajeroId: string; monto: number }) {
+export async function registrarPago(input: {
+  reservaPasajeroId: string;
+  monto: number;
+  medioPago: MedioPago;
+  moneda: Moneda | null;
+}) {
   const usuario = await getCurrentUser();
   if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "cobros")) throw new Error("No autorizado");
   if (!input.monto || input.monto <= 0) throw new Error("El monto tiene que ser mayor a 0");
@@ -14,7 +20,8 @@ export async function registrarPago(input: { reservaPasajeroId: string; monto: n
   const { error: pagoError } = await supabase.from("pagos").insert({
     reserva_pasajero_id: input.reservaPasajeroId,
     monto: input.monto,
-    medio_pago: "efectivo",
+    medio_pago: input.medioPago,
+    moneda: input.medioPago === "efectivo" ? input.moneda : null,
   });
   if (pagoError) throw new Error(pagoError.message);
 

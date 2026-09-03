@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { guardarPlantilla } from "./actions";
+import { Toast } from "@/components/Toast";
+import { digitsWhatsapp } from "@/lib/format";
 
 const ACCENT = "#2E6E8E";
 
@@ -15,6 +17,7 @@ export interface Plantillas {
 export interface Recipient {
   display: string;
   telefono: string;
+  email?: string | null;
   extra: string | null;
   data: Record<string, string | number>;
 }
@@ -22,6 +25,7 @@ export interface Recipient {
 export interface ClienteConEdad {
   display: string;
   telefono: string;
+  email: string | null;
   edad: number | null;
   data: Record<string, string | number>;
 }
@@ -54,8 +58,7 @@ function fillTemplate(tpl: string, data: Record<string, string | number>) {
 }
 
 function waLink(telefono: string, mensaje: string) {
-  const digits = telefono.replace(/\D/g, "");
-  return `https://wa.me/549${digits}?text=${encodeURIComponent(mensaje)}`;
+  return `https://wa.me/${digitsWhatsapp(telefono)}?text=${encodeURIComponent(mensaje)}`;
 }
 
 export function MensajesClient({
@@ -96,6 +99,7 @@ export function MensajesClient({
       .map((c) => ({
         display: c.display,
         telefono: c.telefono,
+        email: c.email,
         extra: c.edad !== null ? `${c.edad} años` : "edad no cargada",
         data: c.data,
       }));
@@ -114,9 +118,21 @@ export function MensajesClient({
   }
 
   function copiarLista() {
-    const lineas = recipients.map((r) => `${r.display} — ${r.telefono}`).join("\n");
-    navigator.clipboard?.writeText(lineas).catch(() => {});
-    setCopyToast(`✓ Se copió la lista (${recipients.length} contactos)`);
+    // Mails separados por coma — es el formato que Gmail espera pegado
+    // directo en el campo CCO (a diferencia de "; " que usa Outlook).
+    const conMail = recipients.filter((r) => !!r.email);
+    const lista = conMail.map((r) => r.email).join(", ");
+    navigator.clipboard?.writeText(lista).catch(() => {});
+
+    if (conMail.length === 0) {
+      setCopyToast("✕ Ninguno de los clientes filtrados tiene mail cargado.");
+      return;
+    }
+    const sinMail = recipients.length - conMail.length;
+    setCopyToast(
+      `✓ Se copiaron ${conMail.length} mail${conMail.length === 1 ? "" : "s"} (separados por coma) — pegalos en el campo CCO de Gmail.` +
+        (sinMail > 0 ? ` (${sinMail} sin mail cargado, no se incluyeron)` : ""),
+    );
   }
 
   return (
@@ -187,11 +203,7 @@ export function MensajesClient({
           </div>
         </div>
       )}
-      {copyToast && (
-        <div className="mx-8 mt-3 inline-block rounded-lg border border-[#BBF0CE] bg-[#DCFCE7] px-3.5 py-2 text-xs font-bold text-[#15803D]">
-          {copyToast}
-        </div>
-      )}
+      {copyToast && <Toast message={copyToast} onClose={() => setCopyToast(null)} className="mx-8 mt-3" />}
 
       <div className="flex flex-col gap-4 px-8 py-[18px]">
         <div className="rounded-2xl border border-line bg-white p-5">

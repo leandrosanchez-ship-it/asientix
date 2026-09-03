@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Toast } from "@/components/Toast";
+import { descargarListaPasajerosPdf } from "@/lib/descargar-lista-pasajeros";
 
 const ACCENT = "#2E6E8E";
 
@@ -30,16 +32,6 @@ export interface ServicioOption {
 
 function fmt(n: number) {
   return "$" + Math.round(n).toLocaleString("es-AR");
-}
-
-function slug(s: string) {
-  return s
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
 }
 
 type Plantilla = "coordinador" | "colectivo" | "hotel";
@@ -131,8 +123,10 @@ export function ReportesClient({
   function exportar() {
     const servicio = serviciosOptions.find((s) => s.id === servicioExport);
     if (!servicio) return;
-    const base = `lista-pasajeros-${slug(servicio.destino)}-${servicio.fecha}`;
-    setExportToast(`✓ Se descargó ${base}-${plantilla}.pdf`);
+    setExportToast("Generando PDF…");
+    descargarListaPasajerosPdf({ servicioId: servicio.id, plantilla, columnas: columnasActivas })
+      .then((filename) => setExportToast(`✓ Se descargó ${filename}`))
+      .catch((e) => setExportToast(`✕ No se pudo generar el PDF: ${e instanceof Error ? e.message : "error"}`));
   }
 
   const hayDatos = mesesOptions.length > 0;
@@ -284,11 +278,7 @@ export function ReportesClient({
                 Descargar PDF
               </button>
             </div>
-            {exportToast && (
-              <div className="mt-4 rounded-[10px] border border-[#BBF0CE] bg-[#DCFCE7] px-4 py-3 text-xs font-bold text-[#15803D]">
-                {exportToast}
-              </div>
-            )}
+            {exportToast && <Toast message={exportToast} onClose={() => setExportToast(null)} className="mt-4" />}
           </div>
         </div>
       )}

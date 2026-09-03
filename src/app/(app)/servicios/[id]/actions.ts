@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
+import { limpiarDni, formatTelefonoWhatsapp } from "@/lib/format";
 import type { PasajeroForm } from "./ReservationWizard";
-import type { TipoHabitacion } from "@/lib/types";
+import type { CobroInicial, TipoHabitacion } from "@/lib/types";
 
 export interface CrearReservaGrupalInput {
   servicioId: string;
@@ -14,6 +15,7 @@ export interface CrearReservaGrupalInput {
   habitacionTipo: TipoHabitacion | null;
   precioPasaje: number;
   codigoValidacion: string;
+  cobro: CobroInicial;
 }
 
 export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
@@ -49,13 +51,13 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
         agencia_id: usuario.agenciaId,
         nombre: f.nombre,
         apellido: f.apellido,
-        dni: f.dni,
+        dni: limpiarDni(f.dni),
         nacimiento: f.nacimiento || null,
-        telefono: f.telefono,
+        telefono: f.telefono ? formatTelefonoWhatsapp(f.telefono) : "",
         email: f.email,
         localidad: f.localidad,
         emer_nombre: f.emerNombre,
-        emer_telefono: f.emerTelefono,
+        emer_telefono: f.emerTelefono ? formatTelefonoWhatsapp(f.emerTelefono) : "",
         emer_parentesco: f.emerParentesco,
         obra_social: f.obraSocial,
         obra_social_nro: f.obraSocialNro,
@@ -81,9 +83,37 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
     reservaPasajeroIds.push(rp.id);
   }
 
+  // El cobro es uno solo para toda la reserva grupal — se reparte
+  // proporcionalmente entre los pasajeros, con el resto del redondeo en el
+  // último para que la suma cierre exacto contra `cobro.montoAbonado`.
+  if (input.cobro.montoAbonado > 0) {
+    let montoRepartido = 0;
+    const pagosRows = reservaPasajeroIds.map((rpId, idx) => {
+      const esUltimo = idx === reservaPasajeroIds.length - 1;
+      const monto = esUltimo
+        ? Math.round((input.cobro.montoAbonado - montoRepartido) * 100) / 100
+        : Math.round((input.cobro.montoAbonado / reservaPasajeroIds.length) * 100) / 100;
+      montoRepartido += monto;
+      return {
+        reserva_pasajero_id: rpId,
+        monto,
+        medio_pago: input.cobro.medioPago,
+        moneda: input.cobro.medioPago === "efectivo" ? input.cobro.moneda : null,
+      };
+    }).filter((p) => p.monto > 0);
+    if (pagosRows.length > 0) {
+      const { error: pagosError } = await supabase.from("pagos").insert(pagosRows);
+      if (pagosError) throw new Error(pagosError.message);
+    }
+  }
+
+  const precioTotalGrupo = input.precioPasaje * input.asientoIds.length;
+  const saldoTotal = Math.max(precioTotalGrupo - input.cobro.montoAbonado, 0);
+  const estadoAsiento = saldoTotal > 0 ? "pendiente" : "ocupado";
+
   const { error: asientosError } = await supabase
     .from("asientos")
-    .update({ estado: "ocupado" })
+    .update({ estado: estadoAsiento })
     .in("id", input.asientoIds);
   if (asientosError) throw new Error(asientosError.message);
 
@@ -93,6 +123,7 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
     accion: "creada",
     detalle: {
       pasajeros: input.forms.map((f) => `${f.apellido}, ${f.nombre}`),
+      cobro: input.cobro,
     },
   });
 

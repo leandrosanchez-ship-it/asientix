@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Agencia, Pantalla, Rol, Usuario } from "@/lib/types";
 import { crearAgencia, crearUsuario, actualizarUsuario } from "./actions";
+import { LogoutButton } from "@/components/LogoutButton";
+import { Toast } from "@/components/Toast";
 
 const ACCENT = "#2E6E8E";
 
@@ -175,15 +177,11 @@ export function SuperadminClient({
           <span className="rounded-full bg-white/[.12] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide">
             Superadmin · Assertix
           </span>
+          <LogoutButton className="rounded-lg border border-white/25 px-3 py-1.5 text-[11px] font-semibold text-white/85 hover:bg-white/10" />
         </div>
       </div>
 
-      {toast && (
-        <div className="mx-8 mt-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#BBF0CE] bg-[#DCFCE7] px-4 py-3 text-xs font-bold text-[#15803D]">
-          <span>{toast}</span>
-          <button onClick={() => setToast(null)} className="text-base leading-none">&times;</button>
-        </div>
-      )}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       <div className="px-8 pt-[26px]">
         <h1 className="font-display text-[20px] font-extrabold text-ink">Agencias y usuarios</h1>

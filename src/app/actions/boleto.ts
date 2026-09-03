@@ -87,14 +87,10 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
       supabase.from("asientos").select("id, numero").in("id", asientoIds),
       supabase.from("clientes").select("id, nombre, apellido, dni").in("id", clienteIds),
       servicio.hotel_id
-        ? supabase.from("hoteles").select("nombre, contacto, telefono").eq("id", servicio.hotel_id).single()
+        ? supabase.from("hoteles").select("nombre").eq("id", servicio.hotel_id).single()
         : Promise.resolve({ data: null }),
       servicio.asistencia_id
-        ? supabase
-            .from("asistencias_viajero")
-            .select("nombre, contacto, telefono")
-            .eq("id", servicio.asistencia_id)
-            .single()
+        ? supabase.from("asistencias_viajero").select("nombre").eq("id", servicio.asistencia_id).single()
         : Promise.resolve({ data: null }),
       servicio.observaciones_ids?.length > 0
         ? supabase.from("observaciones").select("titulo, texto").in("id", servicio.observaciones_ids)
@@ -144,32 +140,49 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   doc.fillColor(INK).fontSize(15).font("Helvetica-Bold").text(agencia?.nombre ?? "Asientix");
   doc.moveDown(0.6);
 
-  doc.fillColor(INK).fontSize(14).font("Helvetica-Bold").text(`${servicio.origen} → ${servicio.destino}`);
+  // "→" (U+2192) no existe en WinAnsiEncoding (la única codificación que
+  // soportan las fuentes estándar de pdfkit) — pdfkit lo reemplaza en
+  // silencio por un glifo cualquiera de esa tabla, así salía "!'" en vez de
+  // la flecha. "->" es ASCII puro, se ve bien en cualquier fuente.
+  doc.fillColor(INK).fontSize(14).font("Helvetica-Bold").text(`${servicio.origen} -> ${servicio.destino}`);
   doc.fillColor(INK_SOFT).fontSize(9).font("Helvetica").text(
     `${fechaLarga(servicio.fecha)} · ${(servicio.hora ?? "").slice(0, 5)} hs · ${servicio.tipo_coche}${servicio.unidad ? " · " + servicio.unidad : ""}`,
   );
   doc.moveDown(0.7);
 
-  // Pasajeros
+  // Pasajeros — cada fila usa un alto fijo (rowH) y todo se posiciona con
+  // coordenadas explícitas relativas a `rowY0`, en vez de encadenar llamadas
+  // a .text() que dependen de dónde haya quedado el cursor de la anterior —
+  // eso es lo que producía superposiciones cuando una fila tenía RESPONSABLE
+  // o un nombre largo.
   doc.fillColor(INK_FAINT).fontSize(8).font("Helvetica-Bold").text(`PASAJEROS (${pasajeros.length})`, { characterSpacing: 0.5 });
   doc.moveDown(0.3);
+  const rowH = 34;
   pasajeros.forEach((p) => {
-    const y = doc.y;
-    doc.fillColor(ACCENT).roundedRect(32, y, 26, 16, 3).fillOpacity(0.12).fill();
-    doc.fillOpacity(1).fillColor(ACCENT).fontSize(8).font("Helvetica-Bold").text(String(p.asiento), 32, y + 4, {
+    const rowY0 = doc.y;
+
+    doc.fillColor(ACCENT).roundedRect(32, rowY0, 26, 16, 3).fillOpacity(0.12).fill();
+    doc.fillOpacity(1).fillColor(ACCENT).fontSize(8).font("Helvetica-Bold").text(String(p.asiento), 32, rowY0 + 4, {
       width: 26,
       align: "center",
     });
-    doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(p.nombre, 66, y, { continued: false });
-    doc.fillColor(INK_FAINT).fontSize(8).font("Helvetica").text(`DNI ${p.dni}`, 66, doc.y);
+
+    const nombreWidth = p.esResponsable ? pageWidth - 34 - 92 : pageWidth - 34;
+    doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(p.nombre, 66, rowY0, { width: nombreWidth, lineBreak: false });
+    doc.fillColor(INK_FAINT).fontSize(8).font("Helvetica").text(`DNI ${p.dni}`, 66, rowY0 + 14, { width: nombreWidth, lineBreak: false });
+
     if (p.esResponsable) {
       doc
         .fillColor("#92400E")
         .fontSize(7)
         .font("Helvetica-Bold")
-        .text("★ RESPONSABLE", pageWidth - 60, y + 2, { width: 92, align: "right" });
+        // "★" (U+2605) tampoco existe en WinAnsiEncoding — mismo problema
+        // que la flecha de arriba, se mostraba como "&". "•" (bullet,
+        // U+2022) sí está en esa tabla de caracteres.
+        .text("• RESPONSABLE", 32 + pageWidth - 92, rowY0 + 2, { width: 92, align: "right" });
     }
-    doc.moveDown(0.5);
+
+    doc.y = rowY0 + rowH;
     doc
       .moveTo(32, doc.y)
       .lineTo(32 + pageWidth, doc.y)
@@ -180,51 +193,44 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   });
 
   doc.moveDown(0.3);
+  // Misma lógica defensiva que las filas de pasajeros: cada línea usa una
+  // coordenada Y explícita relativa a `rowY`, en vez de encadenar .text()
+  // que dependan de dónde quedó el cursor de la llamada anterior — así no
+  // importa si "PRECIO TOTAL" y "EMITIDO" tienen distinto alto de línea.
   const colWidth = pageWidth / 2;
   const rowY = doc.y;
   doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("PRECIO TOTAL", 32, rowY);
-  doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(fmtMoney(precioTotal), 32, doc.y);
+  doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(fmtMoney(precioTotal), 32, rowY + 12);
   doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("EMITIDO", 32 + colWidth, rowY);
   doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(
     new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }),
     32 + colWidth,
-    doc.y - 12,
+    rowY + 12,
   );
-  doc.moveDown(0.9);
+  doc.y = rowY + 26;
 
   // Adicionales
   if (hotel || asistencia || (obsData && obsData.length > 0)) {
+    // Nunca se muestran datos de contacto del hotel/asistencia acá — son
+    // proveedores de la agencia, no del pasajero; solo interesa el nombre
+    // (y, si aplica, el tipo de habitación reservado).
     if (hotel) {
       const y0 = doc.y;
-      doc.rect(32, y0, pageWidth, habitacionLabel ? 40 : 32).fillColor("#F4F5F7").fill();
+      doc.rect(32, y0, pageWidth, 24).fillColor("#F4F5F7").fill();
       doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("HOTEL INCLUIDO", 42, y0 + 6);
       doc
         .fillColor(INK)
         .fontSize(9)
         .font("Helvetica-Bold")
-        .text(`${hotel.nombre}${habitacionLabel ? " · Habitación " + habitacionLabel : ""}`, 42, doc.y);
-      if (hotel.contacto || hotel.telefono) {
-        doc
-          .fillColor(INK_SOFT)
-          .fontSize(8)
-          .font("Helvetica")
-          .text([hotel.contacto, hotel.telefono].filter(Boolean).join(" · "), 42, doc.y);
-      }
-      doc.y = y0 + (habitacionLabel ? 40 : 32) + 8;
+        .text(`${hotel.nombre}${habitacionLabel ? " · Habitación " + habitacionLabel : ""}`, 42, y0 + 14);
+      doc.y = y0 + 24 + 8;
     }
     if (asistencia) {
       const y0 = doc.y;
-      doc.rect(32, y0, pageWidth, 32).fillColor("#F4F5F7").fill();
+      doc.rect(32, y0, pageWidth, 24).fillColor("#F4F5F7").fill();
       doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("ASISTENCIA AL VIAJERO INCLUIDA", 42, y0 + 6);
-      doc.fillColor(INK).fontSize(9).font("Helvetica-Bold").text(asistencia.nombre, 42, doc.y);
-      if (asistencia.contacto || asistencia.telefono) {
-        doc
-          .fillColor(INK_SOFT)
-          .fontSize(8)
-          .font("Helvetica")
-          .text([asistencia.contacto, asistencia.telefono].filter(Boolean).join(" · "), 42, doc.y);
-      }
-      doc.y = y0 + 32 + 8;
+      doc.fillColor(INK).fontSize(9).font("Helvetica-Bold").text(asistencia.nombre, 42, y0 + 14);
+      doc.y = y0 + 24 + 8;
     }
     if (obsData && obsData.length > 0) {
       doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("OBSERVACIONES", 32, doc.y, { characterSpacing: 0.5 });

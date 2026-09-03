@@ -120,10 +120,21 @@ export interface ReservaPasajero {
   precio: number;
 }
 
+export type MedioPago = "efectivo" | "transferencia" | "tarjeta";
+export type Moneda = "ARS" | "USD";
+
 export interface Pago {
   id: string;
   reservaPasajeroId: string;
   monto: number;
-  medioPago: "efectivo" | "transferencia" | "tarjeta";
+  medioPago: MedioPago;
+  moneda: Moneda | null; // solo aplica si medioPago === "efectivo"
   fecha: string;
+}
+
+/** Lo que se cobra al cerrar una reserva grupal — un solo cobro para todo el grupo. */
+export interface CobroInicial {
+  montoAbonado: number;
+  medioPago: MedioPago;
+  moneda: Moneda | null;
 }

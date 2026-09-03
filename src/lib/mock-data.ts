@@ -245,6 +245,7 @@ export function generarAsientosDemo(servicioId: string): AsientosGenerados {
           reservaPasajeroId: `${asientoId}-rp`,
           monto: pagado,
           medioPago: "efectivo",
+          moneda: "ARS",
           fecha: "2026-08-20T09:14:00-03:00",
         });
       }
