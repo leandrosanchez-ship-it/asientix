@@ -26,13 +26,21 @@ export default function SalidasPage() {
 
   return (
     <div>
-      <div className="px-8 pt-8">
-        <h1 className="font-display text-[22px] font-extrabold text-ink">
-          Próximas salidas
-        </h1>
-        <p className="mt-1 text-[13px] text-ink-soft">
-          Elegí un servicio para ver y cargar el mapa de asientos.
-        </p>
+      <div className="flex items-start justify-between px-8 pt-8">
+        <div>
+          <h1 className="font-display text-[22px] font-extrabold text-ink">
+            Próximas salidas
+          </h1>
+          <p className="mt-1 text-[13px] text-ink-soft">
+            Elegí un servicio para ver y cargar el mapa de asientos.
+          </p>
+        </div>
+        <Link
+          href="/servicios/nuevo"
+          className="whitespace-nowrap rounded-[10px] bg-accent px-[18px] py-2.5 text-[13px] font-bold text-white"
+        >
+          + Nuevo servicio
+        </Link>
       </div>
 
       <div className="flex flex-col gap-3.5 px-8 py-6">
