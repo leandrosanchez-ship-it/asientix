@@ -241,7 +241,15 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
       });
     }
   } else {
-    doc.fillColor(INK_FAINT).fontSize(8).font("Helvetica-Oblique").text("Este servicio no incluye adicionales — solo el pasaje.", { align: "center" });
+    // x/width explícitos: sin esto, pdfkit centra el texto a partir de
+    // donde haya quedado el cursor tras la fila PRECIO TOTAL/EMITIDO de
+    // arriba (32 + colWidth), no desde el margen — por eso se veía
+    // corrido hacia la derecha en vez de centrado en toda la página.
+    doc
+      .fillColor(INK_FAINT)
+      .fontSize(8)
+      .font("Helvetica-Oblique")
+      .text("Este servicio no incluye adicionales — solo el pasaje.", 32, doc.y, { width: pageWidth, align: "center" });
   }
 
   doc.moveDown(0.6);
@@ -254,8 +262,14 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   doc.undash();
   doc.moveDown(0.7);
 
-  // QR + validación
-  doc.fillColor(INK_FAINT).fontSize(8).font("Helvetica-Bold").text("VALIDACIÓN DE LA RESERVA", { align: "center", characterSpacing: 0.5 });
+  // QR + validación — x/width explícitos en cada .text() centrado: no
+  // confiar en dónde haya quedado el cursor de la llamada anterior (la
+  // misma causa del bug de alineación de más arriba).
+  doc
+    .fillColor(INK_FAINT)
+    .fontSize(8)
+    .font("Helvetica-Bold")
+    .text("VALIDACIÓN DE LA RESERVA", 32, doc.y, { width: pageWidth, align: "center", characterSpacing: 0.5 });
   doc.moveDown(0.3);
   const qrSize = 96;
   const qrX = 32 + pageWidth / 2 - qrSize / 2;
@@ -265,13 +279,14 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
     .fillColor(INK)
     .fontSize(10)
     .font("Courier-Bold")
-    .text(reserva.codigo_validacion || "—", { align: "center" });
+    .text(reserva.codigo_validacion || "—", 32, doc.y, { width: pageWidth, align: "center" });
   doc.moveDown(0.2);
   doc
     .fillColor(INK_FAINT)
     .fontSize(7.5)
     .font("Helvetica")
-    .text("El chofer o el control de acceso escanea este código para confirmar que la reserva es válida.", {
+    .text("El chofer o el control de acceso escanea este código para confirmar que la reserva es válida.", 32, doc.y, {
+      width: pageWidth,
       align: "center",
     });
 

@@ -136,41 +136,50 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
   return { reservaId: reserva.id as string, clienteIds, reservaPasajeroIds };
 }
 
-export async function marcarPagado(input: {
-  servicioId: string;
-  asientoId: string;
-  reservaPasajeroId: string;
-  monto: number;
-}) {
+export async function marcarPagado(input: { servicioId: string; reservaId: string }) {
   const usuario = await getCurrentUser();
   if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
-  if (input.monto <= 0) return;
 
   const supabase = await createClient();
 
-  const { error: pagoError } = await supabase.from("pagos").insert({
-    reserva_pasajero_id: input.reservaPasajeroId,
-    monto: input.monto,
-    medio_pago: "efectivo",
-  });
-  if (pagoError) throw new Error(pagoError.message);
-
-  // Si el asiento estaba marcado como "pendiente" (seña), al saldar pasa a "ocupado".
-  await supabase.from("asientos").update({ estado: "ocupado" }).eq("id", input.asientoId).eq("estado", "pendiente");
-
-  const { data: rp } = await supabase
+  // La deuda de una reserva de varios asientos es del grupo entero, no de un
+  // asiento suelto — se recalcula todo desde la base (no se confía en un
+  // monto mandado por el cliente) y se salda lo que le falta a cada
+  // pasajero de la reserva, no solo al que se tocó en el mapa.
+  const { data: rps } = await supabase
     .from("reserva_pasajeros")
-    .select("reserva_id")
-    .eq("id", input.reservaPasajeroId)
-    .single();
-  if (rp) {
-    await supabase.from("eventos_reserva").insert({
-      reserva_id: rp.reserva_id,
-      usuario_id: usuario.id,
-      accion: "pago_registrado",
-      detalle: { monto: input.monto },
-    });
+    .select("id, asiento_id, precio")
+    .eq("reserva_id", input.reservaId)
+    .eq("estado", "activo");
+  if (!rps || rps.length === 0) return;
+
+  const rpIds = rps.map((rp) => rp.id);
+  const { data: pagosData } = await supabase.from("pagos").select("reserva_pasajero_id, monto").in("reserva_pasajero_id", rpIds);
+  const pagadoPorRp = new Map<string, number>();
+  (pagosData ?? []).forEach((p) => {
+    pagadoPorRp.set(p.reserva_pasajero_id, (pagadoPorRp.get(p.reserva_pasajero_id) ?? 0) + Number(p.monto));
+  });
+
+  const pagosRows = rps
+    .map((rp) => ({ reserva_pasajero_id: rp.id, monto: Math.round((Number(rp.precio) - (pagadoPorRp.get(rp.id) ?? 0)) * 100) / 100 }))
+    .filter((p) => p.monto > 0)
+    .map((p) => ({ ...p, medio_pago: "efectivo" as const }));
+
+  if (pagosRows.length > 0) {
+    const { error: pagoError } = await supabase.from("pagos").insert(pagosRows);
+    if (pagoError) throw new Error(pagoError.message);
   }
+
+  // Todos los asientos de la reserva que estaban "pendiente" (seña) pasan a "ocupado".
+  const asientoIds = rps.map((rp) => rp.asiento_id);
+  await supabase.from("asientos").update({ estado: "ocupado" }).in("id", asientoIds).eq("estado", "pendiente");
+
+  await supabase.from("eventos_reserva").insert({
+    reserva_id: input.reservaId,
+    usuario_id: usuario.id,
+    accion: "pago_registrado",
+    detalle: { saldado_grupal: true, monto: pagosRows.reduce((s, p) => s + p.monto, 0) },
+  });
 
   revalidatePath(`/servicios/${input.servicioId}`);
 }

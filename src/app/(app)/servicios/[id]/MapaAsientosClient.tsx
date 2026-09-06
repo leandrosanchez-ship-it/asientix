@@ -253,26 +253,54 @@ export function MapaAsientosClient({
       });
   }
 
+  // La deuda de una reserva de varios asientos es del grupo entero, no de
+  // un asiento suelto — si alguien abonó la mitad al reservar, "cuánto
+  // falta" y "marcar como pagado" tienen que mirar la reserva completa,
+  // no el asiento puntual que se tocó en el mapa.
+  function datosGrupo(numero: number) {
+    const seat = seatsByNumero.get(numero);
+    const rp = seat && rpByAsientoId.get(seat.asiento.id);
+    if (!rp) return { rpsDelGrupo: [] as ReservaPasajero[], total: 0, saldo: 0 };
+    const rpsDelGrupo = reservaPasajeros.filter((x) => x.reservaId === rp.reservaId);
+    const total = rpsDelGrupo.reduce((s, x) => s + x.precio, 0);
+    const pagado = rpsDelGrupo.reduce((s, x) => s + pagadoDe(x.id), 0);
+    return { rpsDelGrupo, total, saldo: Math.max(total - pagado, 0) };
+  }
+
   function onMarcarPagado(numero: number) {
     const seat = seatsByNumero.get(numero);
     const rp = seat && rpByAsientoId.get(seat.asiento.id);
     if (!seat || !rp) return;
-    const saldo = rp.precio - pagadoDe(rp.id);
+    const { rpsDelGrupo, saldo } = datosGrupo(numero);
     if (saldo <= 0) return;
 
-    setPagos((prev) => [
-      ...prev,
-      { id: nextId("pago"), reservaPasajeroId: rp.id, monto: saldo, medioPago: "efectivo", moneda: null, fecha: new Date().toISOString() },
-    ]);
+    // Salda lo que le falta a cada pasajero del grupo (no un reparto
+    // proporcional de un monto — cada uno paga exactamente lo suyo) y pasa
+    // todos sus asientos de "pendiente" a "ocupado".
+    const nuevosPagos: Pago[] = [];
+    rpsDelGrupo.forEach((x) => {
+      const debe = x.precio - pagadoDe(x.id);
+      if (debe > 0) {
+        nuevosPagos.push({
+          id: nextId("pago"),
+          reservaPasajeroId: x.id,
+          monto: debe,
+          medioPago: "efectivo",
+          moneda: null,
+          fecha: new Date().toISOString(),
+        });
+      }
+    });
+    setPagos((prev) => [...prev, ...nuevosPagos]);
+
+    const asientoIdsGrupo = new Set(rpsDelGrupo.map((x) => x.asientoId));
     setAsientos((prev) =>
-      prev.map((a) => (a.numero === numero && a.estado === "pendiente" ? { ...a, estado: "ocupado" } : a)),
+      prev.map((a) => (asientoIdsGrupo.has(a.id) && a.estado === "pendiente" ? { ...a, estado: "ocupado" } : a)),
     );
 
     marcarPagadoAction({
       servicioId: servicio.id,
-      asientoId: seat.asiento.id,
-      reservaPasajeroId: rp.id,
-      monto: saldo,
+      reservaId: rp.reservaId,
     }).catch((e) => {
       setToast(`✕ No se pudo guardar el pago en el servidor: ${e instanceof Error ? e.message : "error"}`);
     });
@@ -412,8 +440,8 @@ export function MapaAsientosClient({
         <SeatDetailModal
           numero={modalNumero!}
           cliente={modalSeat.cliente}
-          saldo={modalRP.precio - pagadoDe(modalRP.id)}
-          precioTotal={modalRP.precio}
+          saldo={datosGrupo(modalNumero!).saldo}
+          precioTotal={datosGrupo(modalNumero!).total}
           grupo={grupoDe(modalNumero!)}
           accent={ACCENT}
           servicioId={servicio.id}

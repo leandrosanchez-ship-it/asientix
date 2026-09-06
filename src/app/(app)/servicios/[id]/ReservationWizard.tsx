@@ -378,9 +378,11 @@ export function ReservationWizard({
               >
                 {saldoPendiente > 0 ? "Queda saldo pendiente" : "Se paga en su totalidad"}
               </div>
-              <div className="mt-0.5 text-sm font-extrabold" style={{ color: saldoPendiente > 0 ? "#92400E" : "#15803D" }}>
-                ${saldoPendiente.toLocaleString("es-AR")}
-              </div>
+              {saldoPendiente > 0 && (
+                <div className="mt-0.5 text-sm font-extrabold" style={{ color: "#92400E" }}>
+                  ${saldoPendiente.toLocaleString("es-AR")}
+                </div>
+              )}
             </div>
           </>
         )}

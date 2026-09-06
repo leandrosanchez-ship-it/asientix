@@ -94,7 +94,13 @@ export function SeatDetailModal({
               className="text-[11px] font-bold uppercase"
               style={{ color: pagado ? "#15803D" : "#92400E" }}
             >
-              {pagado ? "Pagado en su totalidad" : "Saldo pendiente"}
+              {pagado
+                ? grupo
+                  ? "Pagado en su totalidad · toda la reserva"
+                  : "Pagado en su totalidad"
+                : grupo
+                  ? "Saldo pendiente de la reserva"
+                  : "Saldo pendiente"}
             </div>
             <div className="mt-0.5 text-sm font-extrabold" style={{ color: pagado ? "#15803D" : "#92400E" }}>
               {pagado ? `$${precioTotal.toLocaleString("es-AR")} · pasaje completo` : `$${saldo.toLocaleString("es-AR")}`}
@@ -119,6 +125,12 @@ export function SeatDetailModal({
             </button>
           )}
         </div>
+
+        {!pagado && grupo && (
+          <div className="-mt-3 mb-[18px] text-[11.5px] text-ink-faint">
+            "Marcar como pagado" salda el saldo de los {grupo.cantidad} asientos de esta reserva, no solo este.
+          </div>
+        )}
 
         <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: accent }}>
           Datos básicos
