@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { crearTarea, moverTarea, limpiarFinalizadas } from "./actions";
+import { Toast } from "@/components/Toast";
 
 const ACCENT = "#2E6E8E";
 
@@ -46,16 +48,31 @@ export function TareasClient({
   week,
   tareasIniciales,
   hoyIso,
+  rangoLabel,
+  esSemanaActual,
+  semanaAnteriorIso,
+  semanaSiguienteIso,
 }: {
   week: WeekDay[];
   tareasIniciales: Tarea[];
   hoyIso: string;
+  rangoLabel: string;
+  esSemanaActual: boolean;
+  semanaAnteriorIso: string;
+  semanaSiguienteIso: string;
 }) {
+  const router = useRouter();
   const [, startTransition] = useTransition();
   const [tareas, setTareas] = useState(tareasIniciales);
   const [filterDay, setFilterDay] = useState<string | null>(null);
   const [nuevaTarea, setNuevaTarea] = useState("");
+  const [nuevaFecha, setNuevaFecha] = useState(week[0]?.fecha ?? hoyIso);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function irASemana(fechaIso: string) {
+    router.push(`/tareas?semana=${fechaIso}`);
+  }
 
   const diaLabel = (fecha: string) => {
     const d = week.find((w) => w.fecha === fecha);
@@ -78,14 +95,23 @@ export function TareasClient({
 
   function addTarea() {
     const titulo = nuevaTarea.trim();
-    if (!titulo) return;
-    const fecha = hoyIso;
+    if (!titulo || !nuevaFecha) return;
+    const fecha = nuevaFecha;
     setNuevaTarea("");
     setError(null);
     startTransition(async () => {
       try {
         const id = await crearTarea({ titulo, fecha });
-        setTareas((prev) => [...prev, { id, titulo, fecha, estado: "pendiente" }]);
+        // Si la fecha elegida cae fuera de la semana que se está mostrando,
+        // igual queda guardada — solo no aparece en este tablero hasta
+        // navegar a esa semana.
+        const enSemanaVisible = week.some((d) => d.fecha === fecha);
+        if (enSemanaVisible) {
+          setTareas((prev) => [...prev, { id, titulo, fecha, estado: "pendiente" }]);
+        } else {
+          setError(null);
+          setToast(`✓ Tarea creada para el ${new Date(`${fecha}T00:00:00`).toLocaleDateString("es-AR")}.`);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Error inesperado");
       }
@@ -114,7 +140,8 @@ export function TareasClient({
         <div>
           <h1 className="font-display text-[22px] font-extrabold text-ink">Tareas</h1>
           <p className="mt-1 text-[13px] text-ink-soft">
-            Organizá el trabajo semanal del equipo. Usá las flechas de cada tarjeta para pasarla de columna.
+            Organizá el trabajo semanal del equipo. Navegá entre semanas y elegí la fecha para dejar tareas
+            cargadas de antemano.
           </p>
         </div>
         <button
@@ -127,11 +154,44 @@ export function TareasClient({
         </button>
       </div>
 
+      <div className="flex items-center justify-between px-8 pt-4">
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => irASemana(semanaAnteriorIso)}
+            className="flex h-8 w-8 items-center justify-center rounded-[9px] border border-line bg-white text-ink-soft"
+            aria-label="Semana anterior"
+          >
+            <ArrowLeft />
+          </button>
+          <div className="min-w-[190px] text-center text-[13px] font-bold text-ink">{rangoLabel}</div>
+          <button
+            type="button"
+            onClick={() => irASemana(semanaSiguienteIso)}
+            className="flex h-8 w-8 items-center justify-center rounded-[9px] border border-line bg-white text-ink-soft"
+            aria-label="Semana siguiente"
+          >
+            <ArrowRight />
+          </button>
+        </div>
+        {!esSemanaActual && (
+          <button
+            type="button"
+            onClick={() => irASemana(hoyIso)}
+            style={{ color: ACCENT, borderColor: ACCENT }}
+            className="rounded-[9px] border bg-white px-3 py-1.5 text-xs font-bold"
+          >
+            Volver a esta semana
+          </button>
+        )}
+      </div>
+
       {error && (
         <div className="mx-8 mt-4 rounded-[10px] border border-[#F8C6C6] bg-[#FEE2E2] px-4 py-3 text-xs font-bold text-[#B91C1C]">
           {error}
         </div>
       )}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       <div className="flex gap-2.5 px-8 pt-[18px]">
         {week.map((day) => {
@@ -146,7 +206,10 @@ export function TareasClient({
           return (
             <button
               key={day.fecha}
-              onClick={() => setFilterDay((prev) => (prev === day.fecha ? null : day.fecha))}
+              onClick={() => {
+                setFilterDay((prev) => (prev === day.fecha ? null : day.fecha));
+                setNuevaFecha(day.fecha);
+              }}
               style={style}
               className="flex max-w-[160px] flex-1 flex-col items-center gap-0.5 rounded-[10px] border bg-white px-1.5 py-2.5"
             >
@@ -214,21 +277,29 @@ export function TareasClient({
               )}
 
               {ci === 0 && (
-                <div className="mt-auto flex gap-1.5 pt-1">
+                <div className="mt-auto flex flex-col gap-1.5 pt-1">
                   <input
                     value={nuevaTarea}
                     onChange={(e) => setNuevaTarea(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && addTarea()}
                     placeholder="Nueva tarea…"
-                    className="flex-1 rounded-lg border border-line bg-white px-2.5 py-2 text-xs outline-none focus:border-accent"
+                    className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-xs outline-none focus:border-accent"
                   />
-                  <button
-                    onClick={addTarea}
-                    style={{ background: ACCENT }}
-                    className="rounded-lg px-3 py-2 text-xs font-bold text-white"
-                  >
-                    +
-                  </button>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="date"
+                      value={nuevaFecha}
+                      onChange={(e) => setNuevaFecha(e.target.value)}
+                      className="flex-1 rounded-lg border border-line bg-white px-2.5 py-2 text-xs outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={addTarea}
+                      style={{ background: ACCENT }}
+                      className="rounded-lg px-3 py-2 text-xs font-bold text-white"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

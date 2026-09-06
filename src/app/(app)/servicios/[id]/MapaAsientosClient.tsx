@@ -129,6 +129,7 @@ export function MapaAsientosClient({
     responsableIdx: number,
     habitacionTipo: TipoHabitacion | null,
     cobro: CobroInicial,
+    precioPasajeUsado: number,
   ) {
     const reservaId = nextId("reserva");
     const codigoValidacion = `AXT-${slug(servicio.destino).slice(0, 3).toUpperCase()}${servicio.fecha.replace(/-/g, "")}-${nextId("").slice(-5).toUpperCase()}`;
@@ -144,8 +145,9 @@ export function MapaAsientosClient({
     // El cobro es uno solo por toda la reserva grupal — se reparte
     // proporcionalmente entre los pasajeros (todos con el mismo precio en la
     // práctica), con el resto del redondeo cargado al último para que la
-    // suma cierre exacto contra `cobro.montoAbonado`.
-    const precioTotalGrupo = servicio.precioPasaje * cart.length;
+    // suma cierre exacto contra `cobro.montoAbonado`. `precioPasajeUsado` es
+    // el precio del servicio, o el que se cargó al vender si no tenía uno fijo.
+    const precioTotalGrupo = precioPasajeUsado * cart.length;
     const saldoTotal = Math.max(precioTotalGrupo - cobro.montoAbonado, 0);
     const estadoAsiento: "ocupado" | "pendiente" = saldoTotal > 0 ? "pendiente" : "ocupado";
 
@@ -175,7 +177,7 @@ export function MapaAsientosClient({
         asientoId: asiento.id,
         clienteId,
         esResponsable: idx === responsableIdx,
-        precio: servicio.precioPasaje,
+        precio: precioPasajeUsado,
       });
 
       if (cobro.montoAbonado > 0) {
@@ -217,7 +219,7 @@ export function MapaAsientosClient({
       forms,
       responsableIdx,
       habitacionTipo,
-      precioPasaje: servicio.precioPasaje,
+      precioPasaje: precioPasajeUsado,
       codigoValidacion,
       cobro,
     })
@@ -326,7 +328,7 @@ export function MapaAsientosClient({
             <div className="mt-0.5 text-[13px] text-ink-soft">
               {formatFecha(servicio.fecha)} · {servicio.hora} hs · {servicio.tipoCoche} · {servicio.unidad}
             </div>
-            {(hotel || asistencia || observaciones.length > 0) && (
+            {(hotel || asistencia || observaciones.length > 0 || servicio.precioPasaje === null) && (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {hotel && <Badge>🏨 {hotel.nombre}</Badge>}
                 {asistencia && <Badge>🛟 {asistencia.nombre}</Badge>}
@@ -334,6 +336,11 @@ export function MapaAsientosClient({
                   <Badge>
                     📋 {observaciones.length} observación{observaciones.length === 1 ? "" : "es"}
                   </Badge>
+                )}
+                {servicio.precioPasaje === null && (
+                  <span className="rounded-full bg-[#FEF3C7] px-2.5 py-1 text-[11px] font-semibold text-[#92400E]">
+                    💲 Sin precio fijo — se carga al vender
+                  </span>
                 )}
               </div>
             )}

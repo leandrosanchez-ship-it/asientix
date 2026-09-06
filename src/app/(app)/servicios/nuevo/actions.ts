@@ -29,8 +29,11 @@ export async function crearServicio(input: CrearServicioInput) {
   if (!input.destino.trim() || !input.fecha) {
     throw new Error("Destino y fecha son obligatorios");
   }
-  const precioPasaje = parseArsMoney(input.precioPasaje);
-  if (precioPasaje <= 0) {
+  // Opcional: si no se define acá, el precio se carga al vender cada
+  // asiento (útil cuando todavía no está cerrado al armar la salida).
+  const precioTexto = input.precioPasaje.trim();
+  const precioPasaje = precioTexto ? parseArsMoney(precioTexto) : null;
+  if (precioPasaje !== null && precioPasaje <= 0) {
     throw new Error("El precio del pasaje tiene que ser mayor a 0");
   }
 

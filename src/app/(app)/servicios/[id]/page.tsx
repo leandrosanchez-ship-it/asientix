@@ -37,7 +37,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
     hora: (s.hora ?? "").slice(0, 5),
     tipoCoche: s.tipo_coche,
     unidad: s.unidad ?? "",
-    precioPasaje: Number(s.precio_pasaje),
+    precioPasaje: s.precio_pasaje === null ? null : Number(s.precio_pasaje),
     incluyeHotel: s.incluye_hotel,
     hotelId: s.hotel_id,
     tiposHabitacionDisponibles: s.tipos_habitacion_disponibles ?? [],

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CobroInicial, MedioPago, Moneda, TipoHabitacion } from "@/lib/types";
 import { parseArsMoney } from "@/lib/format";
 
@@ -87,7 +87,7 @@ export function ReservationWizard({
   onFinish,
 }: {
   cart: number[];
-  precioPasaje: number;
+  precioPasaje: number | null; // null = el servicio no tiene precio fijo, se carga acá
   tiposHabitacionDisponibles: TipoHabitacion[];
   onCancel: () => void;
   onFinish: (
@@ -95,6 +95,7 @@ export function ReservationWizard({
     responsableIdx: number,
     habitacion: TipoHabitacion | null,
     cobro: CobroInicial,
+    precioPasajeUsado: number,
   ) => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -102,8 +103,17 @@ export function ReservationWizard({
   const [responsableIdx, setResponsableIdx] = useState<number | null>(0);
   const [habitacion, setHabitacion] = useState<TipoHabitacion | "">("");
 
-  const precioTotal = precioPasaje * cart.length;
-  const [montoAbonadoStr, setMontoAbonadoStr] = useState(() => String(precioTotal));
+  // Si el servicio no trae precio fijo, se carga acá mismo al vender.
+  const [precioIngresadoStr, setPrecioIngresadoStr] = useState("");
+  const precioResuelto = precioPasaje ?? parseArsMoney(precioIngresadoStr);
+  const precioTotal = precioResuelto * cart.length;
+
+  const [montoAbonadoStr, setMontoAbonadoStr] = useState("0");
+  const [montoTocado, setMontoTocado] = useState(false);
+  useEffect(() => {
+    if (!montoTocado) setMontoAbonadoStr(String(precioTotal));
+  }, [precioTotal, montoTocado]);
+
   const [medioPago, setMedioPago] = useState<MedioPago>("efectivo");
   const [moneda, setMoneda] = useState<Moneda>("ARS");
 
@@ -111,7 +121,7 @@ export function ReservationWizard({
   const isCobroStep = index === PASO_COBRO;
   const form = forms[Math.min(index, cart.length - 1)];
   const isLast = index === PASO_COBRO;
-  const canAdvance = isCobroStep ? true : !!(form.nombre && form.apellido);
+  const canAdvance = isCobroStep ? precioResuelto > 0 : !!(form.nombre && form.apellido);
 
   const montoAbonado = Math.max(0, Math.min(parseArsMoney(montoAbonadoStr), precioTotal));
   const saldoPendiente = Math.max(precioTotal - montoAbonado, 0);
@@ -130,11 +140,18 @@ export function ReservationWizard({
   }
 
   function finish() {
-    onFinish(forms, responsableIdx ?? 0, habitacion || null, {
-      montoAbonado,
-      medioPago,
-      moneda: medioPago === "efectivo" ? moneda : null,
-    });
+    if (precioResuelto <= 0) return;
+    onFinish(
+      forms,
+      responsableIdx ?? 0,
+      habitacion || null,
+      {
+        montoAbonado,
+        medioPago,
+        moneda: medioPago === "efectivo" ? moneda : null,
+      },
+      precioResuelto,
+    );
   }
 
   return (
@@ -270,6 +287,20 @@ export function ReservationWizard({
               ¿Cómo se abona?
             </div>
 
+            {precioPasaje === null && (
+              <div className="mb-3.5">
+                <div className="mb-1 text-xs text-ink-soft">
+                  Este servicio no tiene precio fijo — precio del pasaje (por persona)
+                </div>
+                <input
+                  value={precioIngresadoStr}
+                  onChange={(e) => setPrecioIngresadoStr(e.target.value)}
+                  placeholder="$ 45.000"
+                  className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                />
+              </div>
+            )}
+
             <div className="rounded-[10px] border border-line bg-[#F7F8F7] p-3.5">
               <div className="flex items-center justify-between text-[13px]">
                 <span className="text-ink-soft">Precio total ({cart.length} {cart.length === 1 ? "pasaje" : "pasajes"})</span>
@@ -281,7 +312,10 @@ export function ReservationWizard({
               <div className="mb-1 text-xs text-ink-soft">Monto abonado ahora</div>
               <input
                 value={montoAbonadoStr}
-                onChange={(e) => setMontoAbonadoStr(e.target.value)}
+                onChange={(e) => {
+                  setMontoTocado(true);
+                  setMontoAbonadoStr(e.target.value);
+                }}
                 placeholder="0"
                 className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
               />

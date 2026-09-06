@@ -39,7 +39,7 @@ export function NavBar({ usuario }: { usuario: Usuario }) {
               className={
                 activo
                   ? "border-b-2 border-accent pb-1 text-[13px] font-bold text-accent"
-                  : "text-[13px] font-semibold text-ink-faint hover:text-ink-soft"
+                  : "text-[13px] font-bold text-ink-soft hover:text-ink"
               }
             >
               {tab.label}

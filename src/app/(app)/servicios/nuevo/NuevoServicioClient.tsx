@@ -196,7 +196,7 @@ export function NuevoServicioClient({
     setProveedorError(null);
   }
 
-  const canSave = !!(form.destino && form.fecha && form.precio.trim());
+  const canSave = !!(form.destino && form.fecha);
 
   function save() {
     if (!canSave) return;
@@ -264,7 +264,12 @@ export function NuevoServicioClient({
           </div>
           <Field label="Unidad / coche" value={form.unidad} onChange={(v) => setField("unidad", v)} placeholder="Ej. Coche 12" />
           <Field label="Cantidad de asientos" value={form.asientos} onChange={(v) => setField("asientos", v)} placeholder="40" />
-          <Field label="Precio del pasaje" value={form.precio} onChange={(v) => setField("precio", v)} placeholder="$ 45.000" />
+          <div>
+            <Field label="Precio del pasaje (opcional)" value={form.precio} onChange={(v) => setField("precio", v)} placeholder="$ 45.000" />
+            <div className="mt-1 text-[11.5px] text-ink-faint">
+              Si todavía no lo definiste, dejalo vacío — lo vas a poder cargar al vender cada asiento.
+            </div>
+          </div>
         </div>
 
         <SectionLabel>Servicios adicionales</SectionLabel>

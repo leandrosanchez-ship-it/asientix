@@ -66,7 +66,7 @@ export interface Servicio {
   hora: string; // HH:mm
   tipoCoche: string;
   unidad: string;
-  precioPasaje: number;
+  precioPasaje: number | null; // null = todavía sin definir, se carga al vender cada asiento
   incluyeHotel: boolean;
   hotelId: string | null;
   tiposHabitacionDisponibles: TipoHabitacion[];

@@ -21,6 +21,9 @@ export interface CrearReservaGrupalInput {
 export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
   const usuario = await getCurrentUser();
   if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
+  if (!input.precioPasaje || input.precioPasaje <= 0) {
+    throw new Error("El precio del pasaje tiene que ser mayor a 0");
+  }
 
   const supabase = await createClient();
 
