@@ -4,8 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { crearTarea, moverTarea, limpiarFinalizadas } from "./actions";
 import { Toast } from "@/components/Toast";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 
 export type EstadoTarea = "pendiente" | "en_progreso" | "finalizada";
 

@@ -22,8 +22,7 @@ import { crearReservaGrupal, marcarPagado as marcarPagadoAction } from "./action
 import { descargarBoletoPdf } from "@/lib/descargar-boleto";
 import { Toast } from "@/components/Toast";
 import { limpiarDni, formatTelefonoWhatsapp } from "@/lib/format";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 

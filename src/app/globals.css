@@ -1,13 +1,18 @@
 @import "tailwindcss";
 
-/* Paleta y tipografía de Asientix — tomadas tal cual de la maqueta (.dc.html). */
+/* Paleta de Asientix — "Teal con más vida" (2026-09-06), elegida por el
+   cliente entre 3 opciones comparadas lado a lado. Mismo verde-azulado de
+   siempre, pero más saturado y con los neutros tirando a ese mismo tono en
+   vez de gris puro. El accent crudo también vive en src/lib/theme.ts (para
+   estilos inline y para pdfkit, que no puede leer variables CSS) — mantener
+   ambos en sync. */
 :root {
-  --app-bg: #f4f5f7;
-  --ink: #1c1f27;
-  --ink-soft: #6b7280;
-  --ink-faint: #9aa1ac;
-  --line: #e3e5ea;
-  --accent: #2e6e8e;
+  --app-bg: #f3f7f6;
+  --ink: #12292e;
+  --ink-soft: #5c7a78;
+  --ink-faint: #93aca9;
+  --line: #dce7e4;
+  --accent: #16808f;
   --accent-ink: #ffffff;
   --good-bg: #dcfce7;
   --good-border: #bbf0ce;

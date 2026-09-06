@@ -4,8 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { guardarPlantilla } from "./actions";
 import { Toast } from "@/components/Toast";
 import { digitsWhatsapp } from "@/lib/format";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 
 export interface Plantillas {
   saldo: string;

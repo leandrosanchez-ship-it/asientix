@@ -3,8 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cerrarCaja } from "./actions";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 
 export interface Movimiento {
   hora: string;

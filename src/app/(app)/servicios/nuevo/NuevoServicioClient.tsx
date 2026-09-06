@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import type { AsistenciaViajero, Hotel, Observacion, TipoHabitacion } from "@/lib/types";
 import { crearServicio } from "./actions";
 import { crearHotel, crearAsistencia } from "../../proveedores/actions";
+import { ACCENT } from "@/lib/theme";
 
 const NUEVO = "__nuevo__";
-
-const ACCENT = "#2E6E8E";
 const TIPOS_COCHE = ["Semi-Cama", "Cama", "Ambos"];
 const HABITACIONES: { value: TipoHabitacion; label: string }[] = [
   { value: "single", label: "Single" },

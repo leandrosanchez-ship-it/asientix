@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Toast } from "@/components/Toast";
 import { descargarListaPasajerosPdf } from "@/lib/descargar-lista-pasajeros";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 
 export interface Movimiento {
   fecha: string; // dd/mm/yyyy, para mostrar

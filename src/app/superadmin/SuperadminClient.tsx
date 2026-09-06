@@ -6,8 +6,7 @@ import type { Agencia, Pantalla, Rol, Usuario } from "@/lib/types";
 import { crearAgencia, crearUsuario, actualizarUsuario, eliminarUsuario } from "./actions";
 import { LogoutButton } from "@/components/LogoutButton";
 import { Toast } from "@/components/Toast";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 
 const PANTALLAS: { value: Pantalla; label: string }[] = [
   { value: "salidas", label: "Salidas" },
@@ -174,7 +173,7 @@ export function SuperadminClient({
 
   return (
     <div className="min-h-screen bg-[#F4F5F7]">
-      <div className="flex items-center justify-between px-8 py-3.5 text-white" style={{ background: "#14201D" }}>
+      <div className="flex items-center justify-between px-8 py-3.5 text-white" style={{ background: "#12292E" }}>
         <div className="flex items-center gap-2.5">
           <span className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-white/[.14]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

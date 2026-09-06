@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 
 // 120 min de inactividad total; el aviso aparece 2 min antes de cerrar sesión.
 const INACTIVIDAD_MS = 120 * 60 * 1000;

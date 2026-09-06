@@ -4,10 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { AsistenciaViajero, Hotel, Observacion } from "@/lib/types";
 import { crearHotel, crearAsistencia, crearObservacion } from "./actions";
+import { ACCENT } from "@/lib/theme";
 
 type Tab = "hoteles" | "asistencias" | "observaciones";
-
-const ACCENT = "#2E6E8E";
 
 function Pill({
   active,

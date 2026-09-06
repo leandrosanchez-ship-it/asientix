@@ -4,8 +4,7 @@ import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/current-user";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 const INK = "#1C1F27";
 const INK_SOFT = "#6B7280";
 const INK_FAINT = "#9AA1AC";

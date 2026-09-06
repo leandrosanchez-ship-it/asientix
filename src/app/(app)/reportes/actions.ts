@@ -3,11 +3,11 @@
 import PDFDocument from "pdfkit";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
+import { ACCENT } from "@/lib/theme";
 
 const INK = "#1C1F27";
 const INK_SOFT = "#6B7280";
 const INK_FAINT = "#9AA1AC";
-const ACCENT = "#2E6E8E";
 
 function slug(s: string) {
   return s

@@ -7,14 +7,13 @@ import { descargarBoletoPdf } from "@/lib/descargar-boleto";
 import { Toast } from "@/components/Toast";
 import { digitsWhatsapp } from "@/lib/format";
 import type { MedioPago, Moneda } from "@/lib/types";
+import { ACCENT } from "@/lib/theme";
 
 const MEDIOS_PAGO: { value: MedioPago; label: string }[] = [
   { value: "efectivo", label: "Efectivo" },
   { value: "transferencia", label: "Transferencia" },
   { value: "tarjeta", label: "Tarjeta" },
 ];
-
-const ACCENT = "#2E6E8E";
 
 export interface FilaCobro {
   id: string; // reserva_pasajero id

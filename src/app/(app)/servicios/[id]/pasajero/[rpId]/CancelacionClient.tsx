@@ -4,8 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cancelarPasajero, reprogramarPasajero } from "./actions";
-
-const ACCENT = "#2E6E8E";
+import { ACCENT } from "@/lib/theme";
 
 export type EstadoPasajero = "activo" | "cancelado" | "reprogramado";
 

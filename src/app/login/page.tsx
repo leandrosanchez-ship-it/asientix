@@ -7,7 +7,7 @@ export default function LoginPage() {
       {/* Panel izquierdo: branding */}
       <div
         className="hidden w-[460px] shrink-0 flex-col justify-between p-11 text-white md:flex"
-        style={{ background: "linear-gradient(160deg, #2e6e8e 0%, #16201d 100%)" }}
+        style={{ background: "linear-gradient(160deg, #16808f 0%, #12292e 100%)" }}
       >
         <div>
           <div className="flex items-center gap-2.5">
