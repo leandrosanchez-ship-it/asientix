@@ -14,7 +14,10 @@ export const config = {
      * - _next/static, _next/image (Next.js internals)
      * - favicon.ico
      * - image/font/svg files
+     * - api/* (route handlers como /api/cron/keepalive resuelven su propia
+     *   autorización — ej. CRON_SECRET — Vercel Cron no manda cookie de
+     *   sesión, así que quedaría siempre redirigido a /login sin esto)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
