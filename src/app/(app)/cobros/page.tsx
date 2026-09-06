@@ -19,7 +19,7 @@ export default async function CobrosPage() {
 
   const { data: rpData } = await supabase
     .from("reserva_pasajeros")
-    .select("id, asiento_id, cliente_id, precio, reserva_id, reservas(servicio_id)")
+    .select("id, reserva_id, asiento_id, cliente_id, precio, es_responsable, reservas(servicio_id)")
     .eq("estado", "activo");
 
   const rps = rpData ?? [];
@@ -58,28 +58,50 @@ export default async function CobrosPage() {
   const asientoPorId = new Map((asientosData ?? []).map((a) => [a.id, a]));
   const servicioPorId = new Map((serviciosData ?? []).map((s) => [s.id, s]));
 
-  const filas: FilaCobro[] = rps
-    .map((rp) => {
-      const cliente = clientePorId.get(rp.cliente_id);
-      const asiento = asientoPorId.get(rp.asiento_id);
-      const servicio = asiento ? servicioPorId.get(asiento.servicio_id) : undefined;
-      const total = Number(rp.precio);
-      const pagado = pagadoPorRp.get(rp.id) ?? 0;
-      const saldo = Math.max(total - pagado, 0);
-      return {
-        id: rp.id,
-        pasajero: cliente ? `${cliente.apellido}, ${cliente.nombre}` : "—",
-        nombre: cliente?.nombre ?? "",
-        telefono: cliente?.telefono ?? "",
-        servicio: servicio ? `${servicio.origen} → ${servicio.destino} · ${formatFechaCorta(servicio.fecha)}` : "—",
-        asiento: asiento?.numero ?? 0,
-        total,
-        pagado,
-        saldo,
-      };
-    })
-    .filter((f) => f.saldo > 0)
-    .sort((a, b) => b.saldo - a.saldo);
+  // La deuda es de la reserva completa, no de un pasajero suelto — se
+  // agrupan todos los reserva_pasajeros de una misma reserva en una sola
+  // fila, con el total/pagado/saldo sumados entre todos.
+  const porReserva = new Map<string, typeof rps>();
+  rps.forEach((rp) => {
+    const arr = porReserva.get(rp.reserva_id) ?? [];
+    arr.push(rp);
+    porReserva.set(rp.reserva_id, arr);
+  });
+
+  const filas: FilaCobro[] = [];
+  for (const [reservaId, grupo] of porReserva) {
+    const total = grupo.reduce((s, rp) => s + Number(rp.precio), 0);
+    const pagado = grupo.reduce((s, rp) => s + (pagadoPorRp.get(rp.id) ?? 0), 0);
+    const saldo = Math.max(total - pagado, 0);
+    if (saldo <= 0) continue;
+
+    const responsable = grupo.find((rp) => rp.es_responsable) ?? grupo[0];
+    const clienteResp = clientePorId.get(responsable.cliente_id);
+    const asientos = grupo
+      .map((rp) => asientoPorId.get(rp.asiento_id)?.numero)
+      .filter((n): n is number => n !== undefined)
+      .sort((a, b) => a - b);
+    const primerAsiento = asientoPorId.get(grupo[0].asiento_id);
+    const servicio = primerAsiento ? servicioPorId.get(primerAsiento.servicio_id) : undefined;
+
+    const nombreBase = clienteResp ? `${clienteResp.apellido}, ${clienteResp.nombre}` : "—";
+
+    filas.push({
+      id: reservaId,
+      reservaPasajeroId: responsable.id,
+      pasajero: grupo.length > 1 ? `${nombreBase} +${grupo.length - 1}` : nombreBase,
+      cantidadPasajeros: grupo.length,
+      nombre: clienteResp?.nombre ?? "",
+      telefono: clienteResp?.telefono ?? "",
+      servicio: servicio ? `${servicio.origen} → ${servicio.destino} · ${formatFechaCorta(servicio.fecha)}` : "—",
+      asientos,
+      total,
+      pagado,
+      saldo,
+    });
+  }
+
+  filas.sort((a, b) => b.saldo - a.saldo);
 
   return <CobrosClient filasIniciales={filas} />;
 }

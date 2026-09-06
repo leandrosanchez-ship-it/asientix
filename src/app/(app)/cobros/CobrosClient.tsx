@@ -16,12 +16,14 @@ const MEDIOS_PAGO: { value: MedioPago; label: string }[] = [
 ];
 
 export interface FilaCobro {
-  id: string; // reserva_pasajero id
-  pasajero: string;
+  id: string; // reserva id — una fila por reserva, no por pasajero
+  reservaPasajeroId: string; // del responsable, para descargar el boleto
+  pasajero: string; // "Apellido, Nombre" o "Apellido, Nombre +N" si es grupal
+  cantidadPasajeros: number;
   nombre: string;
   telefono: string;
   servicio: string;
-  asiento: number;
+  asientos: number[];
   total: number;
   pagado: number;
   saldo: number;
@@ -61,13 +63,17 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
   function registrar(fila: FilaCobro) {
     const monto = parseFloat(montoInputs[fila.id] ?? "");
     if (!monto || monto <= 0) return;
+    if (monto > fila.saldo + 0.5) {
+      setError(`El monto no puede superar el saldo pendiente (${fmt(fila.saldo)}).`);
+      return;
+    }
     setError(null);
     const medioPago = medioInputs[fila.id] ?? "efectivo";
     const moneda = monedaInputs[fila.id] ?? "ARS";
 
     startTransition(async () => {
       try {
-        await registrarPago({ reservaPasajeroId: fila.id, monto, medioPago, moneda: medioPago === "efectivo" ? moneda : null });
+        await registrarPago({ reservaId: fila.id, monto, medioPago, moneda: medioPago === "efectivo" ? moneda : null });
         setFilas((prev) =>
           prev.map((f) => {
             if (f.id !== fila.id) return f;
@@ -88,7 +94,7 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
 
   function descargarBoleto(fila: FilaCobro) {
     setToast("Generando boleto…");
-    descargarBoletoPdf(fila.id)
+    descargarBoletoPdf(fila.reservaPasajeroId)
       .then((filename) => setToast(`✓ Se descargó ${filename}`))
       .catch((e) => setToast(`✕ No se pudo generar el boleto: ${e instanceof Error ? e.message : "error"}`));
   }
@@ -98,7 +104,9 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
       <div className="flex items-baseline justify-between px-8 pt-7">
         <div>
           <h1 className="font-display text-[22px] font-extrabold text-ink">Cobros pendientes</h1>
-          <p className="mt-1 text-[13px] text-ink-soft">Pasajeros con saldo pendiente de pago.</p>
+          <p className="mt-1 text-[13px] text-ink-soft">
+            Reservas con saldo pendiente de pago — una reserva de varios asientos cuenta como una sola deuda.
+          </p>
         </div>
         <div className="text-right">
           <div className="text-[11px] uppercase tracking-wide text-ink-faint">Total pendiente</div>
@@ -135,7 +143,7 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
           <div className="grid grid-cols-[1.6fr_2fr_0.7fr_1fr_1fr_1fr_1.6fr] gap-2 border-b border-line bg-app px-5 py-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Pasajero</div>
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Servicio</div>
-            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Asiento</div>
+            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Asientos</div>
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Total</div>
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Pagado</div>
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Saldo</div>
@@ -150,7 +158,7 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
                 <div className="grid grid-cols-[1.6fr_2fr_0.7fr_1fr_1fr_1fr_1.6fr] items-center gap-2 border-b border-[#EEF0F2] px-5 py-3.5 text-[13px]">
                   <div className="font-semibold text-ink">{fila.pasajero}</div>
                   <div className="text-[#4B5563]">{fila.servicio}</div>
-                  <div className="text-[#4B5563]">{fila.asiento}</div>
+                  <div className="text-[#4B5563]">{fila.asientos.join(", ")}</div>
                   <div className="text-[#4B5563]">{fmt(fila.total)}</div>
                   <div className="text-[#4B5563]">{fmt(fila.pagado)}</div>
                   <div className="font-bold" style={{ color: isPaid ? "#15803D" : "#B91C1C" }}>
@@ -192,12 +200,19 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
                   </div>
                 </div>
                 {isExpanded && (
-                  <div className="flex flex-wrap items-center gap-2 border-b border-[#EEF0F2] bg-[#FBFBFA] px-5 py-3.5">
+                  <div className="flex flex-col gap-2 border-b border-[#EEF0F2] bg-[#FBFBFA] px-5 py-3.5">
+                  {fila.cantidadPasajeros > 1 && (
+                    <div className="text-[11.5px] text-ink-faint">
+                      Reserva de {fila.cantidadPasajeros} pasajeros — el monto se reparte proporcional a lo que le
+                      falta a cada uno.
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
                     <input
                       value={montoInputs[fila.id] ?? ""}
                       onChange={(e) => setMontoInputs((prev) => ({ ...prev, [fila.id]: e.target.value }))}
-                      placeholder="Monto a registrar"
-                      className="w-[180px] rounded-lg border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
+                      placeholder={`Monto a registrar (máx. ${fmt(fila.saldo)})`}
+                      className="w-[220px] rounded-lg border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
                     />
                     <select
                       value={medioInputs[fila.id] ?? "efectivo"}
@@ -234,6 +249,7 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
                     >
                       Cerrar
                     </button>
+                  </div>
                   </div>
                 )}
               </div>
