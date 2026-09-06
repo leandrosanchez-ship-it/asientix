@@ -74,6 +74,31 @@ export async function crearUsuario(input: {
   revalidatePath("/superadmin");
 }
 
+export async function eliminarUsuario(input: { usuarioId: string }) {
+  await requireSuperadmin();
+
+  const admin = createAdminClient();
+
+  const { data: usuario, error: fetchError } = await admin
+    .from("usuarios")
+    .select("rol")
+    .eq("id", input.usuarioId)
+    .single();
+  if (fetchError || !usuario) throw new Error(fetchError?.message ?? "No se encontró el usuario");
+  if (usuario.rol === "superadmin") throw new Error("No se puede borrar al superadmin");
+
+  // Borra primero el perfil (usuarios.id -> auth.users.id es la relación
+  // "on delete cascade", pero al revés: si el usuario de Auth se borra
+  // primero y algo falla en el medio, no queda un perfil huérfano).
+  const { error: perfilError } = await admin.from("usuarios").delete().eq("id", input.usuarioId);
+  if (perfilError) throw new Error(perfilError.message);
+
+  const { error: authError } = await admin.auth.admin.deleteUser(input.usuarioId);
+  if (authError) throw new Error(authError.message);
+
+  revalidatePath("/superadmin");
+}
+
 export async function actualizarUsuario(input: {
   usuarioId: string;
   nombre: string;

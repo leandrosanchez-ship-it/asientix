@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Agencia, Pantalla, Rol, Usuario } from "@/lib/types";
-import { crearAgencia, crearUsuario, actualizarUsuario } from "./actions";
+import { crearAgencia, crearUsuario, actualizarUsuario, eliminarUsuario } from "./actions";
 import { LogoutButton } from "@/components/LogoutButton";
 import { Toast } from "@/components/Toast";
 
@@ -76,6 +76,8 @@ export function SuperadminClient({
   const [agModalOpen, setAgModalOpen] = useState(false);
   const [agForm, setAgForm] = useState({ nombre: "", ciudad: "" });
 
+  const [confirmarBorrarId, setConfirmarBorrarId] = useState<string | null>(null);
+
   const agenciaActual = agencias.find((a) => a.id === selectedAgencia) ?? agencias[0];
   const usuariosAgencia = useMemo(
     () => usuarios.filter((u) => u.agenciaId === agenciaActual?.id),
@@ -96,6 +98,20 @@ export function SuperadminClient({
     setForm({ nombre: u.nombre, email: u.email, password: "", rol: u.rol === "superadmin" ? "admin" : u.rol, permisos: u.permisos });
     setError(null);
     setModalOpen(true);
+  }
+
+  function borrarUsuario(u: Usuario) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await eliminarUsuario({ usuarioId: u.id });
+        setToast(`✓ Se borró a ${u.nombre}.`);
+        setConfirmarBorrarId(null);
+        router.refresh();
+      } catch (e) {
+        setToast(`✕ No se pudo borrar: ${e instanceof Error ? e.message : "error inesperado"}`);
+      }
+    });
   }
 
   function togglePermiso(p: Pantalla) {
@@ -245,7 +261,7 @@ export function SuperadminClient({
 
             <div
               className="grid gap-2 border-b border-line bg-[#F4F5F7] px-6 py-[11px]"
-              style={{ gridTemplateColumns: "1.6fr 1.8fr 0.9fr 1.6fr 0.8fr" }}
+              style={{ gridTemplateColumns: "1.6fr 1.8fr 0.9fr 1.4fr 1.3fr" }}
             >
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-ink-soft">Nombre</div>
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-ink-soft">Email</div>
@@ -256,36 +272,66 @@ export function SuperadminClient({
 
             {usuariosAgencia.map((u) => {
               const esAdmin = u.rol === "admin";
+              const confirmando = confirmarBorrarId === u.id;
               return (
-                <div
-                  key={u.id}
-                  className="grid items-center gap-2 border-b border-[#EEF0F2] px-6 py-3.5"
-                  style={{ gridTemplateColumns: "1.6fr 1.8fr 0.9fr 1.6fr 0.8fr" }}
-                >
-                  <div className="text-[13px] font-semibold text-ink">{u.nombre}</div>
-                  <div className="text-[12.5px] text-ink-soft">{u.email}</div>
-                  <div>
-                    <span
-                      className="rounded-full px-[9px] py-1 text-[10px] font-bold"
-                      style={{
-                        background: esAdmin ? "#DCFCE7" : "#EFF6FF",
-                        color: esAdmin ? "#15803D" : "#1D4ED8",
-                      }}
-                    >
-                      {esAdmin ? "Admin" : "Vendedor"}
-                    </span>
+                <div key={u.id}>
+                  <div
+                    className="grid items-center gap-2 border-b border-[#EEF0F2] px-6 py-3.5"
+                    style={{ gridTemplateColumns: "1.6fr 1.8fr 0.9fr 1.4fr 1.3fr" }}
+                  >
+                    <div className="text-[13px] font-semibold text-ink">{u.nombre}</div>
+                    <div className="text-[12.5px] text-ink-soft">{u.email}</div>
+                    <div>
+                      <span
+                        className="rounded-full px-[9px] py-1 text-[10px] font-bold"
+                        style={{
+                          background: esAdmin ? "#DCFCE7" : "#EFF6FF",
+                          color: esAdmin ? "#15803D" : "#1D4ED8",
+                        }}
+                      >
+                        {esAdmin ? "Admin" : "Vendedor"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-[#4B5563]">
+                      {esAdmin ? "Todas" : `${u.permisos.length} de ${PANTALLAS.length}`}
+                    </div>
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => openEdit(u)}
+                        className="rounded-[7px] border border-line bg-white px-[11px] py-1.5 text-[11px] font-bold text-ink"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => setConfirmarBorrarId(u.id)}
+                        className="rounded-[7px] border border-[#F8C6C6] bg-white px-[11px] py-1.5 text-[11px] font-bold text-[#B91C1C]"
+                      >
+                        Borrar
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-xs text-[#4B5563]">
-                    {esAdmin ? "Todas" : `${u.permisos.length} de ${PANTALLAS.length}`}
-                  </div>
-                  <div className="text-right">
-                    <button
-                      onClick={() => openEdit(u)}
-                      className="rounded-[7px] border border-line bg-white px-[11px] py-1.5 text-[11px] font-bold text-ink"
-                    >
-                      Editar
-                    </button>
-                  </div>
+                  {confirmando && (
+                    <div className="flex items-center justify-between gap-3 border-b border-[#F8C6C6] bg-[#FEE2E2] px-6 py-3">
+                      <span className="text-[12.5px] font-semibold text-[#B91C1C]">
+                        ¿Borrar a {u.nombre}? No se puede deshacer — su historial de reservas queda, pero sin su nombre asociado.
+                      </span>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          onClick={() => setConfirmarBorrarId(null)}
+                          className="whitespace-nowrap rounded-[7px] border border-line bg-white px-3 py-1.5 text-[11px] font-bold text-ink-soft"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => borrarUsuario(u)}
+                          disabled={isPending}
+                          className="whitespace-nowrap rounded-[7px] bg-[#B91C1C] px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-55"
+                        >
+                          {isPending ? "Borrando…" : "Sí, borrar"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
