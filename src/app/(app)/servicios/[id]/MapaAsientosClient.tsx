@@ -79,6 +79,10 @@ export function MapaAsientosClient({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [modalNumero, setModalNumero] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Evita que "Marcar como pagado" se dispare dos veces para la misma
+  // reserva (doble clic, doble tap) mientras el pago anterior todavía está
+  // en camino al servidor.
+  const [pagosEnCurso, setPagosEnCurso] = useState<Set<string>>(new Set());
 
   const clientesById = useMemo(() => new Map(clientes.map((c) => [c.id, c])), [clientes]);
   const rpByAsientoId = useMemo(
@@ -271,8 +275,11 @@ export function MapaAsientosClient({
     const seat = seatsByNumero.get(numero);
     const rp = seat && rpByAsientoId.get(seat.asiento.id);
     if (!seat || !rp) return;
+    if (pagosEnCurso.has(rp.reservaId)) return; // ya se está procesando este pago
     const { rpsDelGrupo, saldo } = datosGrupo(numero);
     if (saldo <= 0) return;
+
+    setPagosEnCurso((prev) => new Set(prev).add(rp.reservaId));
 
     // Salda lo que le falta a cada pasajero del grupo (no un reparto
     // proporcional de un monto — cada uno paga exactamente lo suyo) y pasa
@@ -301,9 +308,17 @@ export function MapaAsientosClient({
     marcarPagadoAction({
       servicioId: servicio.id,
       reservaId: rp.reservaId,
-    }).catch((e) => {
-      setToast(`✕ No se pudo guardar el pago en el servidor: ${e instanceof Error ? e.message : "error"}`);
-    });
+    })
+      .catch((e) => {
+        setToast(`✕ No se pudo guardar el pago en el servidor: ${e instanceof Error ? e.message : "error"}`);
+      })
+      .finally(() => {
+        setPagosEnCurso((prev) => {
+          const next = new Set(prev);
+          next.delete(rp.reservaId);
+          return next;
+        });
+      });
   }
 
   function grupoDe(numero: number): GrupoInfo | null {
@@ -446,6 +461,7 @@ export function MapaAsientosClient({
           accent={ACCENT}
           servicioId={servicio.id}
           reservaPasajeroId={modalRP.id}
+          procesandoPago={pagosEnCurso.has(modalRP.reservaId)}
           onClose={() => setModalNumero(null)}
           onMarcarPagado={() => onMarcarPagado(modalNumero!)}
           onDescargarBoleto={() => onDescargarBoleto(modalNumero!)}

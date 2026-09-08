@@ -31,6 +31,7 @@ export function SeatDetailModal({
   accent,
   servicioId,
   reservaPasajeroId,
+  procesandoPago,
   onClose,
   onMarcarPagado,
   onDescargarBoleto,
@@ -43,6 +44,7 @@ export function SeatDetailModal({
   accent: string;
   servicioId: string;
   reservaPasajeroId: string;
+  procesandoPago?: boolean;
   onClose: () => void;
   onMarcarPagado: () => void;
   onDescargarBoleto: () => void;
@@ -118,10 +120,11 @@ export function SeatDetailModal({
             <button
               type="button"
               onClick={onMarcarPagado}
-              style={{ background: accent }}
-              className="whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-bold text-white"
+              disabled={procesandoPago}
+              style={{ background: accent, opacity: procesandoPago ? 0.6 : 1 }}
+              className="whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-bold text-white disabled:cursor-not-allowed"
             >
-              Marcar como pagado
+              {procesandoPago ? "Guardando…" : "Marcar como pagado"}
             </button>
           )}
         </div>
