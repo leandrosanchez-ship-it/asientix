@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Pantalla, Usuario } from "@/lib/types";
 import { LogoutButton } from "./LogoutButton";
+import { AsientixIcon } from "./AsientixIcon";
+import { ACCENT } from "@/lib/theme";
 
 const TABS: { pantalla: Pantalla; label: string; href: string }[] = [
   { pantalla: "salidas", label: "Salidas", href: "/salidas" },
@@ -23,10 +25,18 @@ export function NavBar({ usuario }: { usuario: Usuario }) {
 
   return (
     <div className="flex items-center justify-between border-b border-line bg-white px-8 py-3">
-      <div>
-        <div className="font-display text-sm font-extrabold text-ink">Asientix</div>
-        <div className="mt-0.5 text-[10px] text-ink-faint">
-          Desarrollado por Assertix Software
+      <div className="flex items-center gap-2.5">
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px]"
+          style={{ background: ACCENT }}
+        >
+          <AsientixIcon size={17} />
+        </span>
+        <div>
+          <div className="font-display text-sm font-extrabold text-ink">Asientix</div>
+          <div className="mt-0.5 text-[10px] text-ink-faint">
+            Desarrollado por Assertix Software
+          </div>
         </div>
       </div>
       <nav className="flex gap-7">

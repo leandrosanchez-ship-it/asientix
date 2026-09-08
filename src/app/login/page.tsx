@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { LoginForm } from "./LoginForm";
+import { AsientixIcon } from "@/components/AsientixIcon";
 
 export default function LoginPage() {
   return (
@@ -12,21 +13,7 @@ export default function LoginPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] bg-white/[.18]">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#FFFFFF"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="3" y="6" width="18" height="12" rx="3" />
-                <circle cx="8" cy="18" r="1.6" />
-                <circle cx="16" cy="18" r="1.6" />
-                <path d="M3 11h18" />
-              </svg>
+              <AsientixIcon size={19} />
             </span>
             <span className="font-display text-[17px] font-extrabold">Asientix</span>
           </div>
