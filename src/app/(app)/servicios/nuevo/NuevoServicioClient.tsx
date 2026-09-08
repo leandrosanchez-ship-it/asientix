@@ -262,7 +262,19 @@ export function NuevoServicioClient({
             </select>
           </div>
           <Field label="Unidad / coche" value={form.unidad} onChange={(v) => setField("unidad", v)} placeholder="Ej. Coche 12" />
-          <Field label="Cantidad de asientos" value={form.asientos} onChange={(v) => setField("asientos", v)} placeholder="40" />
+          <div>
+            <Field
+              label="Cantidad de asientos"
+              value={form.asientos}
+              onChange={(v) => {
+                // Nunca más de 90 butacas — el resto de dígitos se recorta al tipear.
+                if (v === "" || (/^\d+$/.test(v) && Number(v) <= 90)) setField("asientos", v);
+              }}
+              placeholder="40"
+              type="number"
+            />
+            <div className="mt-1 text-[11.5px] text-ink-faint">Máximo 90 butacas por coche.</div>
+          </div>
           <div>
             <Field label="Precio del pasaje (opcional)" value={form.precio} onChange={(v) => setField("precio", v)} placeholder="$ 45.000" />
             <div className="mt-1 text-[11.5px] text-ink-faint">
