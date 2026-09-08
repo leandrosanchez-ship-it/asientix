@@ -92,11 +92,15 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
     });
   }
 
+  const [generandoBoletoId, setGenerandoBoletoId] = useState<string | null>(null);
   function descargarBoleto(fila: FilaCobro) {
+    if (generandoBoletoId) return;
+    setGenerandoBoletoId(fila.id);
     setToast("Generando boleto…");
     descargarBoletoPdf(fila.reservaPasajeroId)
       .then((filename) => setToast(`✓ Se descargó ${filename}`))
-      .catch((e) => setToast(`✕ No se pudo generar el boleto: ${e instanceof Error ? e.message : "error"}`));
+      .catch((e) => setToast(`✕ No se pudo generar el boleto: ${e instanceof Error ? e.message : "error"}`))
+      .finally(() => setGenerandoBoletoId(null));
   }
 
   return (
@@ -183,9 +187,11 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
                         <span className="rounded-full bg-[#DCFCE7] px-3 py-1.5 text-[11px] font-bold text-[#15803D]">Pagado</span>
                         <button
                           onClick={() => descargarBoleto(fila)}
-                          className="whitespace-nowrap rounded-lg border border-[#15803D] bg-white px-3 py-1.5 text-[11px] font-bold text-[#15803D]"
+                          disabled={generandoBoletoId === fila.id}
+                          style={{ opacity: generandoBoletoId === fila.id ? 0.6 : 1 }}
+                          className="whitespace-nowrap rounded-lg border border-[#15803D] bg-white px-3 py-1.5 text-[11px] font-bold text-[#15803D] disabled:cursor-not-allowed"
                         >
-                          Boleto
+                          {generandoBoletoId === fila.id ? "Generando…" : "Boleto"}
                         </button>
                       </>
                     ) : (

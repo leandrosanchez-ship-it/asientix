@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { ACCENT } from "@/lib/theme";
+import { SUPERIOR_ROWS, INFERIOR_ROWS, type SeatCell } from "@/lib/seat-layout";
 const INK = "#1C1F27";
 const INK_SOFT = "#6B7280";
 const INK_FAINT = "#9AA1AC";
@@ -27,6 +28,51 @@ function fechaLarga(iso: string) {
 
 function fmtMoney(n: number) {
   return "$" + Math.round(n).toLocaleString("es-AR");
+}
+
+// Mini-mapa de ubicación: pinta los mismos casilleros del piso real
+// (seat-layout.ts, la misma fuente que usa el mapa de asientos interactivo)
+// resaltando en el color de marca solo las butacas de este grupo — así el
+// pasajero ubica su lugar por POSICIÓN (fila, lado, piso) aunque el coche
+// real tenga una numeración distinta a la impresa. Devuelve el alto/ancho
+// realmente usado para poder acomodar lo que sigue debajo.
+function drawFloorMiniMap(
+  doc: PDFKit.PDFDocument,
+  rows: SeatCell[][],
+  numerosDelGrupo: Set<number>,
+  centerX: number,
+  y: number,
+) {
+  // Chico a propósito: son 13 filas en el piso superior nomás para mostrar
+  // la posición, y el voucher (A5) todavía no pagina solo si el contenido no
+  // entra — cuanto más compacto, menos riesgo de desbordar en un grupo grande.
+  const cell = 5.5;
+  const gap = 1.1;
+  const cellWidth = (c: SeatCell) => (c.type === "gap" ? cell * 0.55 : c.wide ? cell * 2 + gap : cell);
+  const rowWidth = (row: SeatCell[]) => row.reduce((w, c) => w + cellWidth(c) + gap, -gap);
+  const widths = rows.map(rowWidth);
+  const mapWidth = Math.max(...widths);
+
+  let curY = y;
+  rows.forEach((row, ri) => {
+    let curX = centerX - widths[ri] / 2;
+    row.forEach((c) => {
+      const w = cellWidth(c);
+      if (c.type === "seat") {
+        const propio = numerosDelGrupo.has(c.numero);
+        doc
+          .roundedRect(curX, curY, w, cell, 1.2)
+          .fillColor(propio ? ACCENT : "#E3E5EA")
+          .fill();
+      } else if (c.type === "amenity") {
+        doc.roundedRect(curX, curY, w, cell, 1.2).fillColor("#EFF1EF").fill();
+      }
+      curX += w + gap;
+    });
+    curY += cell + gap;
+  });
+
+  return { height: curY - y, width: mapWidth };
 }
 
 function slug(s: string) {
@@ -83,7 +129,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   const clienteIds = grupo.map((g) => g.cliente_id);
   const [{ data: asientosData }, { data: clientesData }, { data: hotel }, { data: asistencia }, { data: obsData }] =
     await Promise.all([
-      supabase.from("asientos").select("id, numero").in("id", asientoIds),
+      supabase.from("asientos").select("id, numero, piso").in("id", asientoIds),
       supabase.from("clientes").select("id, nombre, apellido, dni").in("id", clienteIds),
       servicio.hotel_id
         ? supabase.from("hoteles").select("nombre").eq("id", servicio.hotel_id).single()
@@ -96,16 +142,21 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
         : Promise.resolve({ data: [] }),
     ]);
 
-  const asientoPorId = new Map((asientosData ?? []).map((a) => [a.id, a.numero as number]));
+  const asientoPorId = new Map((asientosData ?? []).map((a) => [a.id, a]));
   const clientePorId = new Map((clientesData ?? []).map((c) => [c.id, c]));
 
   const pasajeros = grupo
     .map((g) => {
       const cliente = clientePorId.get(g.cliente_id);
-      const numero = asientoPorId.get(g.asiento_id);
-      if (!cliente || numero === undefined) return null;
+      const asiento = asientoPorId.get(g.asiento_id);
+      if (!cliente || !asiento) return null;
       return {
-        asiento: numero,
+        asiento: asiento.numero as number,
+        // El tipo de butaca es el de ESTE asiento puntual (piso superior =
+        // semi-cama, piso inferior = cama en la disposición real del coche),
+        // no el `tipo_coche` genérico del servicio — un mismo servicio
+        // "Ambos" puede vender asientos de los dos tipos en la misma salida.
+        tipoAsiento: asiento.piso === "superior" ? "Semi-Cama" : "Cama",
         nombre: `${cliente.apellido}, ${cliente.nombre}`,
         dni: cliente.dni || "—",
         esResponsable: g.es_responsable,
@@ -119,7 +170,12 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   const precioTotal = pasajeros.reduce((s, p) => s + p.precio, 0);
   const habitacionLabel = reserva.habitacion_tipo ? (HABITACION_LABELS[reserva.habitacion_tipo] ?? reserva.habitacion_tipo) : null;
 
-  const qrDataUrl = await QRCode.toDataURL(reserva.codigo_validacion || reserva.id, {
+  // El QR ahora codifica un link real a una página pública de verificación
+  // (sin login) en vez del código pelado — quien lo escanea ve directamente
+  // qué incluye la reserva, no solo un string sin sentido para un humano.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://asientix.com.ar";
+  const urlVerificacion = `${siteUrl}/verificar/${encodeURIComponent(reserva.codigo_validacion || reserva.id)}`;
+  const qrDataUrl = await QRCode.toDataURL(urlVerificacion, {
     margin: 1,
     width: 240,
     color: { dark: "#1C1F27", light: "#FFFFFF" },
@@ -144,8 +200,11 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   // silencio por un glifo cualquiera de esa tabla, así salía "!'" en vez de
   // la flecha. "->" es ASCII puro, se ve bien en cualquier fuente.
   doc.fillColor(INK).fontSize(14).font("Helvetica-Bold").text(`${servicio.origen} -> ${servicio.destino}`);
+  // El tipo de coche del servicio ("Ambos", por ejemplo) no dice qué butaca
+  // compró cada pasajero — eso ahora se muestra por pasajero (Semi-Cama o
+  // Cama según el piso real del asiento vendido), no acá arriba.
   doc.fillColor(INK_SOFT).fontSize(9).font("Helvetica").text(
-    `${fechaLarga(servicio.fecha)} · ${(servicio.hora ?? "").slice(0, 5)} hs · ${servicio.tipo_coche}${servicio.unidad ? " · " + servicio.unidad : ""}`,
+    `${fechaLarga(servicio.fecha)} · ${(servicio.hora ?? "").slice(0, 5)} hs${servicio.unidad ? " · " + servicio.unidad : ""}`,
   );
   doc.moveDown(0.7);
 
@@ -156,7 +215,11 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   // o un nombre largo.
   doc.fillColor(INK_FAINT).fontSize(8).font("Helvetica-Bold").text(`PASAJEROS (${pasajeros.length})`, { characterSpacing: 0.5 });
   doc.moveDown(0.3);
-  const rowH = 34;
+  // 30 en vez de 34: el mini-mapa nuevo de más abajo ya usa bastante alto de
+  // página — hay que recuperar unos puntos acá para que un voucher de varios
+  // pasajeros con adicionales siga entrando en una sola hoja A5 (todavía no
+  // hay paginación automática real para cuando no entra).
+  const rowH = 30;
   pasajeros.forEach((p) => {
     const rowY0 = doc.y;
 
@@ -168,7 +231,11 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
 
     const nombreWidth = p.esResponsable ? pageWidth - 34 - 92 : pageWidth - 34;
     doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(p.nombre, 66, rowY0, { width: nombreWidth, lineBreak: false });
-    doc.fillColor(INK_FAINT).fontSize(8).font("Helvetica").text(`DNI ${p.dni}`, 66, rowY0 + 14, { width: nombreWidth, lineBreak: false });
+    doc
+      .fillColor(INK_FAINT)
+      .fontSize(8)
+      .font("Helvetica")
+      .text(`DNI ${p.dni} · ${p.tipoAsiento}`, 66, rowY0 + 14, { width: nombreWidth, lineBreak: false });
 
     if (p.esResponsable) {
       doc
@@ -188,10 +255,60 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
       .strokeColor(LINE)
       .lineWidth(0.5)
       .stroke();
-    doc.moveDown(0.35);
+    doc.moveDown(0.25);
   });
 
-  doc.moveDown(0.3);
+  // Mini-mapa de ubicación — al margen de que la numeración de la butaca
+  // pueda no coincidir con la del coche real que finalmente sale, esto
+  // ubica el lugar por posición física (fila, lado, piso). Solo se dibuja
+  // el/los piso(s) donde el grupo realmente tiene butacas.
+  const numerosSuperior = new Set(pasajeros.filter((p) => p.tipoAsiento === "Semi-Cama").map((p) => p.asiento));
+  const numerosInferior = new Set(pasajeros.filter((p) => p.tipoAsiento === "Cama").map((p) => p.asiento));
+  if (numerosSuperior.size > 0 || numerosInferior.size > 0) {
+    doc.moveDown(0.2);
+    doc
+      .fillColor(INK_FAINT)
+      .fontSize(8)
+      .font("Helvetica-Bold")
+      .text("UBICACIÓN EN EL COCHE", 32, doc.y, { width: pageWidth, align: "center", characterSpacing: 0.5 });
+    doc.moveDown(0.15);
+
+    const ambosPisos = numerosSuperior.size > 0 && numerosInferior.size > 0;
+    const mapaY = doc.y;
+    doc.fillColor(INK_FAINT).fontSize(6).font("Helvetica-Bold").text("FRENTE", 32, mapaY, { width: pageWidth, align: "center" });
+    let alturaUsada = 10;
+
+    if (ambosPisos) {
+      const cxSup = 32 + pageWidth / 4;
+      const cxInf = 32 + (pageWidth * 3) / 4;
+      const sup = drawFloorMiniMap(doc, SUPERIOR_ROWS, numerosSuperior, cxSup, mapaY + 9);
+      const inf = drawFloorMiniMap(doc, INFERIOR_ROWS, numerosInferior, cxInf, mapaY + 9);
+      alturaUsada = 9 + Math.max(sup.height, inf.height) + 9;
+      doc.fillColor(INK_FAINT).fontSize(6.5).font("Helvetica-Bold").text("PISO SUPERIOR", 32, mapaY + 9 + sup.height + 1, {
+        width: pageWidth / 2,
+        align: "center",
+      });
+      doc.fillColor(INK_FAINT).fontSize(6.5).font("Helvetica-Bold").text("PISO INFERIOR", 32 + pageWidth / 2, mapaY + 9 + inf.height + 1, {
+        width: pageWidth / 2,
+        align: "center",
+      });
+    } else {
+      const rows = numerosSuperior.size > 0 ? SUPERIOR_ROWS : INFERIOR_ROWS;
+      const numeros = numerosSuperior.size > 0 ? numerosSuperior : numerosInferior;
+      const m = drawFloorMiniMap(doc, rows, numeros, 32 + pageWidth / 2, mapaY + 9);
+      alturaUsada = 9 + m.height + 9;
+    }
+
+    doc.y = mapaY + alturaUsada;
+    doc
+      .fillColor(INK_FAINT)
+      .fontSize(6)
+      .font("Helvetica-Bold")
+      .text("FONDO", 32, doc.y, { width: pageWidth, align: "center" });
+    doc.moveDown(0.15);
+  }
+
+  doc.moveDown(0.1);
   // Misma lógica defensiva que las filas de pasajeros: cada línea usa una
   // coordenada Y explícita relativa a `rowY`, en vez de encadenar .text()
   // que dependan de dónde quedó el cursor de la llamada anterior — así no
@@ -252,7 +369,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
       .text("Este servicio no incluye adicionales — solo el pasaje.", 32, doc.y, { width: pageWidth, align: "center" });
   }
 
-  doc.moveDown(0.6);
+  doc.moveDown(0.4);
   doc
     .moveTo(32, doc.y)
     .lineTo(32 + pageWidth, doc.y)
@@ -260,18 +377,28 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
     .strokeColor("#DDE1E6")
     .stroke();
   doc.undash();
-  doc.moveDown(0.7);
+  doc.moveDown(0.5);
 
   // QR + validación — x/width explícitos en cada .text() centrado: no
   // confiar en dónde haya quedado el cursor de la llamada anterior (la
   // misma causa del bug de alineación de más arriba).
+  //
+  // Salto de página manual: pdfkit pagina solo los .text() que no entran,
+  // pero NO las imágenes (.image()) — sin este chequeo, un voucher con
+  // varios pasajeros y adicionales podía dejar el QR cortado a la mitad al
+  // borde de la hoja, con el código y la leyenda huérfanos en una página
+  // aparte. Se reserva el alto real de todo el bloque antes de dibujarlo.
+  const qrSize = 96;
+  const altoBloqueQr = 12 + 6 + qrSize + 8 + 14 + 4 + 20;
+  if (doc.y + altoBloqueQr > doc.page.height - doc.page.margins.bottom) {
+    doc.addPage();
+  }
   doc
     .fillColor(INK_FAINT)
     .fontSize(8)
     .font("Helvetica-Bold")
     .text("VALIDACIÓN DE LA RESERVA", 32, doc.y, { width: pageWidth, align: "center", characterSpacing: 0.5 });
   doc.moveDown(0.3);
-  const qrSize = 96;
   const qrX = 32 + pageWidth / 2 - qrSize / 2;
   doc.image(qrBuffer, qrX, doc.y, { width: qrSize, height: qrSize });
   doc.y += qrSize + 8;
@@ -285,7 +412,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
     .fillColor(INK_FAINT)
     .fontSize(7.5)
     .font("Helvetica")
-    .text("El chofer o el control de acceso escanea este código para confirmar que la reserva es válida.", 32, doc.y, {
+    .text("Al escanear se abre la página con los datos de la reserva, para validarla.", 32, doc.y, {
       width: pageWidth,
       align: "center",
     });

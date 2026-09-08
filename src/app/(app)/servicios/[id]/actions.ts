@@ -183,3 +183,29 @@ export async function marcarPagado(input: { servicioId: string; reservaId: strin
 
   revalidatePath(`/servicios/${input.servicioId}`);
 }
+
+/**
+ * Borra un servicio (salida) y todo lo que dependa de él. Solo admin/superadmin
+ * — es destructivo e irreversible. El borrado en la base es un solo delete:
+ * asientos/reservas ya tienen "on delete cascade" hacia servicios, y
+ * reserva_pasajeros/pagos/eventos_reserva ya cascadean desde reservas/asientos
+ * (ver supabase/migrations/0001_init.sql) — no hay que borrar tabla por tabla
+ * a mano. Los clientes (personas) NO se borran, solo dejan de tener esta reserva.
+ */
+export async function eliminarServicio(servicioId: string) {
+  const usuario = await getCurrentUser();
+  if (!usuario || !usuario.agenciaId) throw new Error("No autorizado");
+  if (usuario.rol !== "admin" && usuario.rol !== "superadmin") {
+    throw new Error("Solo un administrador puede eliminar un servicio");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("servicios")
+    .delete()
+    .eq("id", servicioId)
+    .eq("agencia_id", usuario.agenciaId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/salidas");
+}

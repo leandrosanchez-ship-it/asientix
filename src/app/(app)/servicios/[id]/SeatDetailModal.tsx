@@ -32,6 +32,7 @@ export function SeatDetailModal({
   servicioId,
   reservaPasajeroId,
   procesandoPago,
+  generandoBoleto,
   onClose,
   onMarcarPagado,
   onDescargarBoleto,
@@ -45,6 +46,7 @@ export function SeatDetailModal({
   servicioId: string;
   reservaPasajeroId: string;
   procesandoPago?: boolean;
+  generandoBoleto?: boolean;
   onClose: () => void;
   onMarcarPagado: () => void;
   onDescargarBoleto: () => void;
@@ -112,9 +114,11 @@ export function SeatDetailModal({
             <button
               type="button"
               onClick={onDescargarBoleto}
-              className="whitespace-nowrap rounded-lg border border-[#15803D] px-3.5 py-2 text-xs font-bold text-[#15803D]"
+              disabled={generandoBoleto}
+              style={{ opacity: generandoBoleto ? 0.6 : 1 }}
+              className="whitespace-nowrap rounded-lg border border-[#15803D] px-3.5 py-2 text-xs font-bold text-[#15803D] disabled:cursor-not-allowed"
             >
-              Descargar boleto
+              {generandoBoleto ? "Generando…" : "Descargar boleto"}
             </button>
           ) : (
             <button

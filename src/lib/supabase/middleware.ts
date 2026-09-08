@@ -40,7 +40,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicRoute = request.nextUrl.pathname.startsWith("/login");
+  // /verificar/[codigo] es la página pública que abre el QR del boleto — la
+  // escanea cualquiera (chofer, control de acceso) sin cuenta ni sesión.
+  const isPublicRoute =
+    request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/verificar");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

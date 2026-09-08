@@ -63,7 +63,11 @@ export function TareasClient({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [tareas, setTareas] = useState(tareasIniciales);
-  const [filterDay, setFilterDay] = useState<string | null>(null);
+  // Por default arranca en el día de hoy si está en la semana visible —
+  // si se navegó a otra semana (no hay isToday acá), no filtra por día.
+  const [filterDay, setFilterDay] = useState<string | null>(
+    () => week.find((d) => d.isToday)?.fecha ?? null,
+  );
   const [nuevaTarea, setNuevaTarea] = useState("");
   const [nuevaFecha, setNuevaFecha] = useState(week[0]?.fecha ?? hoyIso);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +137,12 @@ export function TareasClient({
   const visibleTasks = tareas.filter((t) => filterDay === null || t.fecha === filterDay);
   const hasFinished = visibleTasks.some((t) => t.estado === "finalizada");
 
+  // Días (de la semana visible) con tareas sin finalizar que ya quedaron
+  // atrás — su recuadro parpadea para llamar la atención sobre pendientes.
+  const diasConAtraso = new Set(
+    tareas.filter((t) => t.fecha < hoyIso && t.estado !== "finalizada").map((t) => t.fecha),
+  );
+
   return (
     <div>
       <div className="flex items-baseline justify-between px-8 pt-7">
@@ -195,13 +205,16 @@ export function TareasClient({
       <div className="flex gap-2.5 px-8 pt-[18px]">
         {week.map((day) => {
           const selected = filterDay === day.fecha;
+          const atrasado = diasConAtraso.has(day.fecha);
           const style = selected
             ? { background: ACCENT, borderColor: ACCENT }
-            : day.isToday
-              ? { borderColor: ACCENT }
-              : { borderColor: "#E3E5EA" };
-          const labelColor = selected ? "#fff" : day.isToday ? ACCENT : "#9AA1AC";
-          const numColor = selected ? "#fff" : day.isToday ? ACCENT : "#1C1F27";
+            : atrasado
+              ? { background: "#FEF3C7", borderColor: "#F59E0B", borderWidth: 1.5 }
+              : day.isToday
+                ? { borderColor: ACCENT, borderWidth: 1.5 }
+                : { borderColor: "#CBD8D5" };
+          const labelColor = selected ? "#fff" : atrasado ? "#92400E" : day.isToday ? ACCENT : "#5C7A78";
+          const numColor = selected ? "#fff" : atrasado ? "#92400E" : day.isToday ? ACCENT : "#12292E";
           return (
             <button
               key={day.fecha}
@@ -210,7 +223,8 @@ export function TareasClient({
                 setNuevaFecha(day.fecha);
               }}
               style={style}
-              className="flex max-w-[160px] flex-1 flex-col items-center gap-0.5 rounded-[10px] border bg-white px-1.5 py-2.5"
+              title={atrasado ? "Quedaron tareas sin finalizar de este día" : undefined}
+              className={`flex max-w-[160px] flex-1 flex-col items-center gap-0.5 rounded-[10px] border bg-white px-1.5 py-2.5 ${atrasado ? "animate-pulse" : ""}`}
             >
               <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: labelColor }}>
                 {day.label}
@@ -229,7 +243,7 @@ export function TareasClient({
           return (
             <div
               key={col.estado}
-              className="flex min-h-[520px] flex-1 flex-col gap-2.5 rounded-2xl border border-line bg-[#FBFBFA] p-3.5"
+              className="flex min-h-[520px] flex-1 flex-col gap-2.5 rounded-2xl border border-[#D2E1DE] bg-[#EDF3F2] p-3.5 shadow-[0_1px_2px_rgba(18,41,46,0.05)]"
             >
               <div className="flex items-center justify-between px-1 pb-1.5 pt-0.5">
                 <div className="text-[13px] font-extrabold text-ink">{col.nombre}</div>
@@ -242,7 +256,7 @@ export function TareasClient({
               </div>
 
               {tareasCol.map((t) => (
-                <div key={t.id} className="rounded-[10px] border border-line bg-white p-3">
+                <div key={t.id} className="rounded-[10px] border border-[#C9D9D6] bg-white p-3 shadow-[0_1px_3px_rgba(18,41,46,0.08)]">
                   <div className="text-[13px] font-semibold leading-snug text-ink">{t.titulo}</div>
                   <div className="mt-2.5 flex items-center justify-between">
                     <span className="rounded-full bg-app px-2 py-0.5 text-[11px] font-bold text-ink-soft">

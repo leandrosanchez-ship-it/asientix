@@ -83,6 +83,7 @@ export function MapaAsientosClient({
   // reserva (doble clic, doble tap) mientras el pago anterior todavía está
   // en camino al servidor.
   const [pagosEnCurso, setPagosEnCurso] = useState<Set<string>>(new Set());
+  const [generandoBoleto, setGenerandoBoleto] = useState(false);
 
   const clientesById = useMemo(() => new Map(clientes.map((c) => [c.id, c])), [clientes]);
   const rpByAsientoId = useMemo(
@@ -350,10 +351,13 @@ export function MapaAsientosClient({
     const seat = seatsByNumero.get(numero);
     const rp = seat && rpByAsientoId.get(seat.asiento.id);
     if (!seat || !rp) return;
+    if (generandoBoleto) return; // ya se está generando este mismo boleto
+    setGenerandoBoleto(true);
     setToast("Generando boleto…");
     descargarBoletoPdf(rp.id)
       .then((filename) => setToast(`✓ Se descargó ${filename}`))
-      .catch((e) => setToast(`✕ No se pudo generar el boleto: ${e instanceof Error ? e.message : "error"}`));
+      .catch((e) => setToast(`✕ No se pudo generar el boleto: ${e instanceof Error ? e.message : "error"}`))
+      .finally(() => setGenerandoBoleto(false));
   }
 
   const modalSeat = modalNumero !== null ? seatsByNumero.get(modalNumero) : null;
@@ -462,6 +466,7 @@ export function MapaAsientosClient({
           servicioId={servicio.id}
           reservaPasajeroId={modalRP.id}
           procesandoPago={pagosEnCurso.has(modalRP.reservaId)}
+          generandoBoleto={generandoBoleto}
           onClose={() => setModalNumero(null)}
           onMarcarPagado={() => onMarcarPagado(modalNumero!)}
           onDescargarBoleto={() => onDescargarBoleto(modalNumero!)}
