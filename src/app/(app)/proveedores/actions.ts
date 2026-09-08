@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
-import { formatTelefonoWhatsapp } from "@/lib/format";
+import { formatTelefonoWhatsapp, capitalizarPalabras } from "@/lib/format";
 
 // "proveedores" (pantalla dedicada) o "salidas" (alta de servicio, que
 // permite cargar un hotel/asistencia nuevo al vuelo sin salir del alta).
@@ -23,8 +23,8 @@ export async function crearHotel(input: { nombre: string; contacto: string; tele
     .from("hoteles")
     .insert({
       agencia_id: agenciaId,
-      nombre: input.nombre.trim(),
-      contacto: input.contacto.trim(),
+      nombre: capitalizarPalabras(input.nombre),
+      contacto: capitalizarPalabras(input.contacto),
       telefono: input.telefono.trim() ? formatTelefonoWhatsapp(input.telefono) : "",
     })
     .select("id")
@@ -44,8 +44,8 @@ export async function crearAsistencia(input: { nombre: string; contacto: string;
     .from("asistencias_viajero")
     .insert({
       agencia_id: agenciaId,
-      nombre: input.nombre.trim(),
-      contacto: input.contacto.trim(),
+      nombre: capitalizarPalabras(input.nombre),
+      contacto: capitalizarPalabras(input.contacto),
       telefono: input.telefono.trim() ? formatTelefonoWhatsapp(input.telefono) : "",
     })
     .select("id")

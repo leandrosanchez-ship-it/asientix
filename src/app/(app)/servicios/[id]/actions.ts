@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
-import { limpiarDni, formatTelefonoWhatsapp } from "@/lib/format";
+import { limpiarDni, formatTelefonoWhatsapp, capitalizarPalabras } from "@/lib/format";
 import type { PasajeroForm } from "./ReservationWizard";
 import type { CobroInicial, TipoHabitacion } from "@/lib/types";
 
@@ -52,18 +52,23 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
       .from("clientes")
       .insert({
         agencia_id: usuario.agenciaId,
-        nombre: f.nombre,
-        apellido: f.apellido,
+        // Nombre, apellido, localidad y contacto de emergencia se guardan
+        // siempre en Mayúscula Inicial por palabra, sin importar cómo se
+        // haya tipeado ("MARIA GAETAN"/"maria gaetan" → "Maria Gaetan") —
+        // pedido explícito para no depender de que quien carga los datos
+        // use mayúsculas de forma consistente.
+        nombre: capitalizarPalabras(f.nombre),
+        apellido: capitalizarPalabras(f.apellido),
         dni: limpiarDni(f.dni),
         nacimiento: f.nacimiento || null,
         telefono: f.telefono ? formatTelefonoWhatsapp(f.telefono) : "",
-        email: f.email,
-        localidad: f.localidad,
-        emer_nombre: f.emerNombre,
+        email: f.email.trim().toLowerCase(),
+        localidad: capitalizarPalabras(f.localidad),
+        emer_nombre: capitalizarPalabras(f.emerNombre),
         emer_telefono: f.emerTelefono ? formatTelefonoWhatsapp(f.emerTelefono) : "",
         emer_parentesco: f.emerParentesco,
-        obra_social: f.obraSocial,
-        obra_social_nro: f.obraSocialNro,
+        obra_social: f.obraSocial.trim(),
+        obra_social_nro: f.obraSocialNro.trim(),
       })
       .select("id")
       .single();

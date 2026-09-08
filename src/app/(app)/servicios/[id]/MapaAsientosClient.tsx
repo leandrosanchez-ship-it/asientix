@@ -21,7 +21,7 @@ import { SeatDetailModal, habitacionLabel, type GrupoInfo } from "./SeatDetailMo
 import { crearReservaGrupal, marcarPagado as marcarPagadoAction } from "./actions";
 import { descargarBoletoPdf } from "@/lib/descargar-boleto";
 import { Toast } from "@/components/Toast";
-import { limpiarDni, formatTelefonoWhatsapp } from "@/lib/format";
+import { limpiarDni, formatTelefonoWhatsapp, capitalizarPalabras } from "@/lib/format";
 import { ACCENT } from "@/lib/theme";
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -171,6 +171,14 @@ export function MapaAsientosClient({
         id: clienteId,
         agenciaId: servicio.agenciaId,
         ...form,
+        // Mismo formateo que aplica el server action al guardar — así la
+        // vista optimista ya muestra "Maria Gaetan" y no cambia de golpe
+        // cuando se recarga la página.
+        nombre: capitalizarPalabras(form.nombre),
+        apellido: capitalizarPalabras(form.apellido),
+        localidad: capitalizarPalabras(form.localidad),
+        emerNombre: capitalizarPalabras(form.emerNombre),
+        email: form.email.trim().toLowerCase(),
         dni: limpiarDni(form.dni),
         telefono: form.telefono ? formatTelefonoWhatsapp(form.telefono) : "",
         emerTelefono: form.emerTelefono ? formatTelefonoWhatsapp(form.emerTelefono) : "",

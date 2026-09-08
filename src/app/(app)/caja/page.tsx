@@ -12,18 +12,30 @@ function isoLocal(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-export default async function CajaPage() {
+function addDays(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+export default async function CajaPage({ searchParams }: PageProps<"/caja">) {
   await requirePantalla("caja");
   const supabase = await createClient();
 
   const hoy = new Date();
   const hoyIso = isoLocal(hoy);
-  const fechaHoy = `${DIAS[hoy.getDay()]} ${hoy.getDate()} ${MESES[hoy.getMonth()]} ${hoy.getFullYear()}`;
 
-  // Rango de "hoy" en UTC no sirve acá — pagos.fecha es timestamptz, así que
+  // ?fecha=YYYY-MM-DD navega a un día anterior (historial de cierres) sin
+  // perder "hoy" como default — misma idea que ?semana= en Tareas.
+  const fechaParam = (await searchParams).fecha;
+  const fechaRaw = Array.isArray(fechaParam) ? fechaParam[0] : fechaParam;
+  const seleccionada = fechaRaw && /^\d{4}-\d{2}-\d{2}$/.test(fechaRaw) ? new Date(`${fechaRaw}T00:00:00`) : hoy;
+  const fechaIso = isoLocal(seleccionada);
+  const esHoy = fechaIso === hoyIso;
+  const fechaLabel = `${DIAS[seleccionada.getDay()]} ${seleccionada.getDate()} ${MESES[seleccionada.getMonth()]} ${seleccionada.getFullYear()}`;
+
+  // Rango del día en UTC no sirve acá — pagos.fecha es timestamptz, así que
   // filtramos por el día calendario local con un rango [00:00, 24:00).
-  const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0).toISOString();
-  const fin = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1, 0, 0, 0).toISOString();
+  const inicio = new Date(seleccionada.getFullYear(), seleccionada.getMonth(), seleccionada.getDate(), 0, 0, 0).toISOString();
+  const fin = new Date(seleccionada.getFullYear(), seleccionada.getMonth(), seleccionada.getDate() + 1, 0, 0, 0).toISOString();
 
   const { data: pagosData } = await supabase
     .from("pagos")
@@ -92,21 +104,34 @@ export default async function CajaPage() {
 
   const { data: cierreData } = await supabase
     .from("cierres_caja")
-    .select("efectivo_esperado, efectivo_contado, diferencia")
-    .eq("fecha", hoyIso)
+    .select("efectivo_esperado, efectivo_contado, diferencia, usuario_id")
+    .eq("fecha", fechaIso)
     .maybeSingle();
+
+  const { data: cerradoPorUsuario } = cierreData?.usuario_id
+    ? await supabase.from("usuarios").select("nombre").eq("id", cierreData.usuario_id).maybeSingle()
+    : { data: null };
 
   const cierre: Cierre | null = cierreData
     ? {
         efectivoEsperado: Number(cierreData.efectivo_esperado),
         efectivoContado: Number(cierreData.efectivo_contado),
         diferencia: Number(cierreData.diferencia),
+        cerradoPor: cerradoPorUsuario?.nombre ?? null,
       }
     : null;
 
   return (
     <CajaClient
-      fechaHoy={fechaHoy}
+      // key: fuerza un remount limpio al cambiar de día — sin esto el
+      // useState local (contado/cerrado) se queda con los datos del día
+      // anterior, mismo motivo que en Tareas.
+      key={fechaIso}
+      fechaHoy={fechaLabel}
+      esHoy={esHoy}
+      fechaAnteriorIso={isoLocal(addDays(seleccionada, -1))}
+      fechaSiguienteIso={isoLocal(addDays(seleccionada, 1))}
+      hoyIso={hoyIso}
       total={total}
       efectivo={efectivo}
       transferencia={transferencia}

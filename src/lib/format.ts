@@ -9,6 +9,22 @@ export function limpiarDni(dni: string): string {
 }
 
 /**
+ * Pone en mayúscula la primera letra de cada palabra y el resto en
+ * minúscula, sin importar cómo lo haya tipeado quien carga el dato — "MARIA
+ * GAETAN", "maria gaetan" o "MaRiA gAetAn" guardan igual: "Maria Gaetan".
+ * Corta palabra en espacio, guion o apóstrofo (para "Pérez-López", "D'Angelo").
+ * Pensado para nombres/apellidos/localidades — no usar en campos donde la
+ * mayúscula importa por otra razón (siglas de obra social, emails, etc.).
+ */
+export function capitalizarPalabras(s: string): string {
+  return s
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase());
+}
+
+/**
  * Normaliza un teléfono argentino a formato E.164 listo para WhatsApp:
  * "+549" + código de área (sin el 0 nacional) + número (sin el 15 de celular).
  * El "15" argentino se escribe pegado al código de área (ej. "0351 15

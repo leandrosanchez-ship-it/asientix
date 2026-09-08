@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import { SUPERIOR_IDS, INFERIOR_IDS } from "@/lib/mock-data";
-import { parseArsMoney } from "@/lib/format";
+import { parseArsMoney, capitalizarPalabras } from "@/lib/format";
 import type { TipoHabitacion } from "@/lib/types";
 
 export interface CrearServicioInput {
@@ -43,8 +43,8 @@ export async function crearServicio(input: CrearServicioInput) {
     .from("servicios")
     .insert({
       agencia_id: usuario.agenciaId,
-      origen: input.origen.trim(),
-      destino: input.destino.trim(),
+      origen: capitalizarPalabras(input.origen),
+      destino: capitalizarPalabras(input.destino),
       fecha: input.fecha,
       hora: input.hora || "00:00",
       tipo_coche: input.tipoCoche,
