@@ -95,7 +95,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
 
   const { data: reserva } = await supabase
     .from("reservas")
-    .select("id, servicio_id, habitacion_tipo, codigo_validacion")
+    .select("id, servicio_id, habitacion_tipo, regimen_comida, codigo_validacion")
     .eq("id", rp.reserva_id)
     .single();
   if (!reserva) throw new Error("No se encontró la reserva");
@@ -103,7 +103,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   const { data: servicio } = await supabase
     .from("servicios")
     .select(
-      "origen, destino, fecha, hora, tipo_coche, unidad, hotel_id, asistencia_id, observaciones_ids, agencia_id",
+      "origen, destino, fecha, hora, tipo_coche, unidad, hotel_id, asistencia_id, coordinador_id, transporte_id, observaciones_ids, agencia_id",
     )
     .eq("id", reserva.servicio_id)
     .single();
@@ -122,20 +122,37 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
 
   const asientoIds = grupo.map((g) => g.asiento_id);
   const clienteIds = grupo.map((g) => g.cliente_id);
-  const [{ data: asientosData }, { data: clientesData }, { data: hotel }, { data: asistencia }, { data: obsData }] =
-    await Promise.all([
-      supabase.from("asientos").select("id, numero, piso").in("id", asientoIds),
-      supabase.from("clientes").select("id, nombre, apellido, dni").in("id", clienteIds),
-      servicio.hotel_id
-        ? supabase.from("hoteles").select("nombre").eq("id", servicio.hotel_id).single()
-        : Promise.resolve({ data: null }),
-      servicio.asistencia_id
-        ? supabase.from("asistencias_viajero").select("nombre").eq("id", servicio.asistencia_id).single()
-        : Promise.resolve({ data: null }),
-      servicio.observaciones_ids?.length > 0
-        ? supabase.from("observaciones").select("titulo, texto").in("id", servicio.observaciones_ids)
-        : Promise.resolve({ data: [] }),
-    ]);
+  const [
+    { data: asientosData },
+    { data: clientesData },
+    { data: hotel },
+    { data: asistencia },
+    { data: coordinador },
+    { data: transporte },
+    { data: obsData },
+  ] = await Promise.all([
+    supabase.from("asientos").select("id, numero, piso").in("id", asientoIds),
+    supabase.from("clientes").select("id, nombre, apellido, dni").in("id", clienteIds),
+    servicio.hotel_id
+      ? supabase.from("hoteles").select("nombre, direccion").eq("id", servicio.hotel_id).single()
+      : Promise.resolve({ data: null }),
+    servicio.asistencia_id
+      ? supabase
+          .from("asistencias_viajero")
+          .select("nombre, tope_cobertura_moneda, tope_cobertura_monto")
+          .eq("id", servicio.asistencia_id)
+          .single()
+      : Promise.resolve({ data: null }),
+    servicio.coordinador_id
+      ? supabase.from("coordinadores").select("nombre, apellido, telefono").eq("id", servicio.coordinador_id).single()
+      : Promise.resolve({ data: null }),
+    servicio.transporte_id
+      ? supabase.from("transportes").select("nombre").eq("id", servicio.transporte_id).single()
+      : Promise.resolve({ data: null }),
+    servicio.observaciones_ids?.length > 0
+      ? supabase.from("observaciones").select("titulo, texto").in("id", servicio.observaciones_ids)
+      : Promise.resolve({ data: [] }),
+  ]);
 
   const asientoPorId = new Map((asientosData ?? []).map((a) => [a.id, a]));
   const clientePorId = new Map((clientesData ?? []).map((c) => [c.id, c]));
@@ -164,6 +181,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   const responsable = pasajeros.find((p) => p.esResponsable) ?? pasajeros[0];
   const precioTotal = pasajeros.reduce((s, p) => s + p.precio, 0);
   const habitacionLabel = habitacionLabelFn(reserva.habitacion_tipo);
+  const regimen = regimenLabel(reserva.regimen_comida);
 
   // El QR ahora codifica un link real a una página pública de verificación
   // (sin login) en vez del código pelado — quien lo escanea ve directamente
@@ -321,27 +339,57 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   doc.y = rowY + 26;
 
   // Adicionales
-  if (hotel || asistencia || (obsData && obsData.length > 0)) {
+  if (hotel || asistencia || coordinador || transporte || (obsData && obsData.length > 0)) {
     // Nunca se muestran datos de contacto del hotel/asistencia acá — son
     // proveedores de la agencia, no del pasajero; solo interesa el nombre
-    // (y, si aplica, el tipo de habitación reservado).
+    // (y, si aplica, el tipo de habitación/régimen/tope de cobertura).
     if (hotel) {
       const y0 = doc.y;
-      doc.rect(32, y0, pageWidth, 24).fillColor("#F4F5F7").fill();
+      const tieneDireccion = !!hotel.direccion;
+      const boxH = tieneDireccion ? 32 : 24;
+      doc.rect(32, y0, pageWidth, boxH).fillColor("#F4F5F7").fill();
       doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("HOTEL INCLUIDO", 42, y0 + 6);
       doc
         .fillColor(INK)
         .fontSize(9)
         .font("Helvetica-Bold")
-        .text(`${hotel.nombre}${habitacionLabel ? " · Habitación " + habitacionLabel : ""}`, 42, y0 + 14);
-      doc.y = y0 + 24 + 8;
+        .text(
+          `${hotel.nombre}${habitacionLabel ? " · Habitación " + habitacionLabel : ""}${regimen ? " · " + regimen : ""}`,
+          42,
+          y0 + 14,
+          { width: pageWidth - 20, lineBreak: false },
+        );
+      if (tieneDireccion) {
+        doc.fillColor(INK_SOFT).fontSize(7.5).font("Helvetica").text(hotel.direccion, 42, y0 + 24, { width: pageWidth - 20, lineBreak: false });
+      }
+      doc.y = y0 + boxH + 8;
     }
     if (asistencia) {
       const y0 = doc.y;
+      const tope =
+        asistencia.tope_cobertura_monto && asistencia.tope_cobertura_moneda
+          ? ` · Tope ${asistencia.tope_cobertura_moneda} ${Number(asistencia.tope_cobertura_monto).toLocaleString("es-AR")}`
+          : "";
       doc.rect(32, y0, pageWidth, 24).fillColor("#F4F5F7").fill();
       doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("ASISTENCIA AL VIAJERO INCLUIDA", 42, y0 + 6);
-      doc.fillColor(INK).fontSize(9).font("Helvetica-Bold").text(asistencia.nombre, 42, y0 + 14);
+      doc
+        .fillColor(INK)
+        .fontSize(9)
+        .font("Helvetica-Bold")
+        .text(`${asistencia.nombre}${tope}`, 42, y0 + 14, { width: pageWidth - 20, lineBreak: false });
       doc.y = y0 + 24 + 8;
+    }
+    if (coordinador || transporte) {
+      const partes = [
+        coordinador ? `Coordinador: ${coordinador.apellido}, ${coordinador.nombre}${coordinador.telefono ? " · " + coordinador.telefono : ""}` : null,
+        transporte ? `Transporte: ${transporte.nombre}` : null,
+      ].filter((x): x is string => !!x);
+      doc
+        .fillColor(INK_SOFT)
+        .fontSize(7.5)
+        .font("Helvetica")
+        .text(partes.join("   ·   "), 32, doc.y, { width: pageWidth });
+      doc.moveDown(0.4);
     }
     if (obsData && obsData.length > 0) {
       doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("OBSERVACIONES", 32, doc.y, { characterSpacing: 0.5 });
