@@ -25,6 +25,7 @@ export function SeatDetailModal({
   onClose,
   onMarcarPagado,
   onDescargarBoleto,
+  onReemplazarPasajero,
 }: {
   numero: number;
   cliente: Cliente;
@@ -39,6 +40,7 @@ export function SeatDetailModal({
   onClose: () => void;
   onMarcarPagado: () => void;
   onDescargarBoleto: () => void;
+  onReemplazarPasajero: () => void;
 }) {
   const pagado = saldo <= 0;
 
@@ -150,12 +152,21 @@ export function SeatDetailModal({
           </>
         )}
 
-        <Link
-          href={`/servicios/${servicioId}/pasajero/${reservaPasajeroId}`}
-          className="mt-[22px] block w-full rounded-lg border border-[#F8C6C6] px-3.5 py-2.5 text-center text-xs font-bold text-[#B91C1C]"
-        >
-          Cancelar / reprogramar
-        </Link>
+        <div className="mt-[22px] flex gap-2">
+          <button
+            type="button"
+            onClick={onReemplazarPasajero}
+            className="flex-1 rounded-lg border border-line px-3.5 py-2.5 text-center text-xs font-bold text-ink-soft"
+          >
+            Reemplazar pasajero
+          </button>
+          <Link
+            href={`/servicios/${servicioId}/pasajero/${reservaPasajeroId}`}
+            className="flex-1 rounded-lg border border-[#F8C6C6] px-3.5 py-2.5 text-center text-xs font-bold text-[#B91C1C]"
+          >
+            Cancelar / reprogramar
+          </Link>
+        </div>
       </div>
     </div>
   );

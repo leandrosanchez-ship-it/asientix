@@ -234,3 +234,79 @@ export async function eliminarServicio(servicioId: string) {
 
   revalidatePath("/salidas");
 }
+
+export interface ReemplazarPasajeroInput {
+  servicioId: string;
+  reservaPasajeroId: string;
+  form: PasajeroForm;
+}
+
+/**
+ * Cambia QUIÉN ocupa una butaca ya vendida sin tocar nada más — mismo
+ * asiento, mismo precio, mismo historial de pagos (quedan tal cual, son de
+ * la butaca, no de la persona) y misma reserva/grupo. El voucher se
+ * "regenera" solo la próxima vez que se descarga: siempre lee el
+ * cliente_id vigente de reserva_pasajeros, no guarda una copia vieja.
+ */
+export async function reemplazarPasajero(input: ReemplazarPasajeroInput) {
+  const usuario = await getCurrentUser();
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "salidas")) throw new Error("No autorizado");
+
+  const supabase = await createClient();
+  const f = input.form;
+  const datosCliente = {
+    nombre: capitalizarPalabras(f.nombre),
+    apellido: capitalizarPalabras(f.apellido),
+    dni: limpiarDni(f.dni),
+    nacimiento: f.nacimiento || null,
+    telefono: f.telefono ? formatTelefonoWhatsapp(f.telefono) : "",
+    email: f.email.trim().toLowerCase(),
+    localidad: capitalizarPalabras(f.localidad),
+    emer_nombre: capitalizarPalabras(f.emerNombre),
+    emer_telefono: f.emerTelefono ? formatTelefonoWhatsapp(f.emerTelefono) : "",
+    emer_parentesco: f.emerParentesco,
+    obra_social: f.obraSocial.trim(),
+    obra_social_nro: f.obraSocialNro.trim(),
+  };
+
+  // Mismo patrón que al reservar: si se buscó por DNI y ya existe, se
+  // reutiliza (y actualiza) ese cliente en vez de crear uno nuevo.
+  let clienteId: string;
+  if (f.clienteIdExistente) {
+    const { error } = await supabase.from("clientes").update(datosCliente).eq("id", f.clienteIdExistente).eq("agencia_id", usuario.agenciaId);
+    if (error) throw new Error(error.message);
+    clienteId = f.clienteIdExistente;
+  } else {
+    const { data: cliente, error } = await supabase
+      .from("clientes")
+      .insert({ agencia_id: usuario.agenciaId, ...datosCliente })
+      .select("id")
+      .single();
+    if (error || !cliente) throw new Error(error?.message ?? "No se pudo crear el pasajero");
+    clienteId = cliente.id;
+  }
+
+  const { data: rpAnterior } = await supabase
+    .from("reserva_pasajeros")
+    .select("reserva_id, cliente_id")
+    .eq("id", input.reservaPasajeroId)
+    .single();
+
+  const { error: rpError } = await supabase
+    .from("reserva_pasajeros")
+    .update({ cliente_id: clienteId, embarque: capitalizarPalabras(f.embarque) })
+    .eq("id", input.reservaPasajeroId);
+  if (rpError) throw new Error(rpError.message);
+
+  if (rpAnterior) {
+    await supabase.from("eventos_reserva").insert({
+      reserva_id: rpAnterior.reserva_id,
+      usuario_id: usuario.id,
+      accion: "pasajero_reemplazado",
+      detalle: { pasajero_nuevo: `${f.apellido}, ${f.nombre}` },
+    });
+  }
+
+  revalidatePath(`/servicios/${input.servicioId}`);
+  return { clienteId };
+}

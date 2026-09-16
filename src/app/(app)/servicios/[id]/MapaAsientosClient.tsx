@@ -19,7 +19,8 @@ import { SUPERIOR_IDS, INFERIOR_IDS } from "@/lib/mock-data";
 import { SeatMap, type SeatVM } from "./SeatMap";
 import { ReservationWizard, type PasajeroForm } from "./ReservationWizard";
 import { SeatDetailModal, habitacionLabel, type GrupoInfo } from "./SeatDetailModal";
-import { crearReservaGrupal, marcarPagado as marcarPagadoAction } from "./actions";
+import { ReemplazarPasajeroModal } from "./ReemplazarPasajeroModal";
+import { crearReservaGrupal, marcarPagado as marcarPagadoAction, reemplazarPasajero as reemplazarPasajeroAction } from "./actions";
 import { descargarBoletoPdf } from "@/lib/descargar-boleto";
 import { Toast } from "@/components/Toast";
 import { limpiarDni, formatTelefonoWhatsapp, capitalizarPalabras } from "@/lib/format";
@@ -85,6 +86,8 @@ export function MapaAsientosClient({
   // en camino al servidor.
   const [pagosEnCurso, setPagosEnCurso] = useState<Set<string>>(new Set());
   const [generandoBoleto, setGenerandoBoleto] = useState(false);
+  const [reemplazandoNumero, setReemplazandoNumero] = useState<number | null>(null);
+  const [guardandoReemplazo, setGuardandoReemplazo] = useState(false);
 
   const clientesById = useMemo(() => new Map(clientes.map((c) => [c.id, c])), [clientes]);
   const rpByAsientoId = useMemo(
@@ -378,6 +381,47 @@ export function MapaAsientosClient({
       .finally(() => setGenerandoBoleto(false));
   }
 
+  function onConfirmarReemplazo(form: PasajeroForm) {
+    if (reemplazandoNumero === null) return;
+    const seat = seatsByNumero.get(reemplazandoNumero);
+    const rp = seat && rpByAsientoId.get(seat.asiento.id);
+    if (!seat || !rp) return;
+    setGuardandoReemplazo(true);
+    reemplazarPasajeroAction({ servicioId: servicio.id, reservaPasajeroId: rp.id, form })
+      .then(({ clienteId }) => {
+        // Mismo formateo que aplica el server action al guardar, para que
+        // la vista optimista ya muestre el dato prolijo.
+        const datosCliente = {
+          agenciaId: servicio.agenciaId,
+          nombre: capitalizarPalabras(form.nombre),
+          apellido: capitalizarPalabras(form.apellido),
+          dni: limpiarDni(form.dni),
+          nacimiento: form.nacimiento || null,
+          telefono: form.telefono ? formatTelefonoWhatsapp(form.telefono) : "",
+          email: form.email.trim().toLowerCase(),
+          localidad: capitalizarPalabras(form.localidad),
+          emerNombre: capitalizarPalabras(form.emerNombre),
+          emerTelefono: form.emerTelefono ? formatTelefonoWhatsapp(form.emerTelefono) : "",
+          emerParentesco: form.emerParentesco,
+          obraSocial: form.obraSocial,
+          obraSocialNro: form.obraSocialNro,
+        };
+        setClientes((prev) => {
+          const existe = prev.some((c) => c.id === clienteId);
+          return existe
+            ? prev.map((c) => (c.id === clienteId ? { ...c, ...datosCliente } : c))
+            : [...prev, { id: clienteId, ...datosCliente }];
+        });
+        setReservaPasajeros((prev) =>
+          prev.map((x) => (x.id === rp.id ? { ...x, clienteId, embarque: capitalizarPalabras(form.embarque) } : x)),
+        );
+        setToast(`✓ Se reemplazó el pasajero del asiento ${reemplazandoNumero}`);
+        setReemplazandoNumero(null);
+      })
+      .catch((e) => setToast(`✕ No se pudo reemplazar el pasajero: ${e instanceof Error ? e.message : "error"}`))
+      .finally(() => setGuardandoReemplazo(false));
+  }
+
   const modalSeat = modalNumero !== null ? seatsByNumero.get(modalNumero) : null;
   const modalRP = modalSeat && rpByAsientoId.get(modalSeat.asiento.id);
 
@@ -494,6 +538,17 @@ export function MapaAsientosClient({
           onClose={() => setModalNumero(null)}
           onMarcarPagado={() => onMarcarPagado(modalNumero!)}
           onDescargarBoleto={() => onDescargarBoleto(modalNumero!)}
+          onReemplazarPasajero={() => setReemplazandoNumero(modalNumero!)}
+        />
+      )}
+
+      {reemplazandoNumero !== null && (
+        <ReemplazarPasajeroModal
+          numero={reemplazandoNumero}
+          accent={ACCENT}
+          isPending={guardandoReemplazo}
+          onCancel={() => setReemplazandoNumero(null)}
+          onConfirmar={onConfirmarReemplazo}
         />
       )}
     </div>
