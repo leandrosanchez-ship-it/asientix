@@ -11,6 +11,7 @@ export interface Movimiento {
   fechaOrden: string; // ISO, para ordenar
   pasajero: string;
   servicio: string;
+  vendedor: string;
   monto: number;
   medio: string;
 }
@@ -128,6 +129,13 @@ export function ReportesClient({
   const d: MesData = cache[mes] ?? MES_VACIO;
   const ticketProm = d.pasajes > 0 ? d.total / d.pasajes : 0;
 
+  // Filtro "ventas por vendedor": quién hizo cada reserva queda registrado
+  // al vender (crearReservaGrupal guarda el usuario logueado) — acá se
+  // puede filtrar el histórico del mes por esa persona.
+  const [vendedorFiltro, setVendedorFiltro] = useState("");
+  const vendedoresDelMes = [...new Set(d.movimientos.map((m) => m.vendedor).filter((v) => v && v !== "—"))].sort();
+  const movimientosFiltrados = vendedorFiltro ? d.movimientos.filter((m) => m.vendedor === vendedorFiltro) : d.movimientos;
+
   const columnasActivas = columnasPorPlantilla[plantilla];
 
   function toggleColumna(key: string) {
@@ -205,27 +213,45 @@ export function ReportesClient({
             </div>
 
             <div className="flex-[1.4] overflow-hidden rounded-2xl border border-line bg-white">
-              <div className="border-b border-line px-5 py-[18px]">
+              <div className="flex items-center justify-between border-b border-line px-5 py-[14px]">
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Histórico de movimientos</div>
+                {vendedoresDelMes.length > 0 && (
+                  <select
+                    value={vendedorFiltro}
+                    onChange={(e) => setVendedorFiltro(e.target.value)}
+                    className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold outline-none focus:border-accent"
+                  >
+                    <option value="">Todos los vendedores</option>
+                    {vendedoresDelMes.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
-              <div className="grid grid-cols-[1fr_1.6fr_1.6fr_1fr_1.1fr] gap-2 border-b border-line bg-app px-5 py-2.5">
+              <div className="grid grid-cols-[0.9fr_1.4fr_1.4fr_1fr_0.9fr_1fr] gap-2 border-b border-line bg-app px-5 py-2.5">
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Fecha</div>
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Pasajero</div>
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Servicio</div>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Vendedor</div>
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Monto</div>
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Medio</div>
               </div>
-              {d.movimientos.map((mov, i) => (
-                <div key={i} className="grid grid-cols-[1fr_1.6fr_1.6fr_1fr_1.1fr] items-center gap-2 border-b border-[#EEF0F2] px-5 py-3 text-[13px]">
+              {movimientosFiltrados.map((mov, i) => (
+                <div key={i} className="grid grid-cols-[0.9fr_1.4fr_1.4fr_1fr_0.9fr_1fr] items-center gap-2 border-b border-[#EEF0F2] px-5 py-3 text-[13px]">
                   <div className="text-[#4B5563]">{mov.fecha}</div>
                   <div className="font-semibold text-ink">{mov.pasajero}</div>
                   <div className="text-[#4B5563]">{mov.servicio}</div>
+                  <div className="text-[#4B5563]">{mov.vendedor}</div>
                   <div className="font-bold text-ink">{fmt(mov.monto)}</div>
                   <div className="text-[#4B5563]">{mov.medio}</div>
                 </div>
               ))}
-              {d.movimientos.length === 0 && (
-                <div className="px-5 py-11 text-center text-[13px] text-ink-faint">Sin movimientos este mes.</div>
+              {movimientosFiltrados.length === 0 && (
+                <div className="px-5 py-11 text-center text-[13px] text-ink-faint">
+                  {d.movimientos.length === 0 ? "Sin movimientos este mes." : "Ningún movimiento de ese vendedor este mes."}
+                </div>
               )}
             </div>
           </div>

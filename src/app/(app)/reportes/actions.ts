@@ -66,6 +66,7 @@ export interface MovimientoMes {
   fechaOrden: string;
   pasajero: string;
   servicio: string;
+  vendedor: string;
   monto: number;
   medio: string;
 }
@@ -119,22 +120,31 @@ export async function obtenerDatosMes(mesKey: string): Promise<MesDataResult> {
 
   const { data: rpData } =
     asientoIds.length > 0
-      ? await supabase.from("reserva_pasajeros").select("id, asiento_id, cliente_id, precio").eq("estado", "activo").in("asiento_id", asientoIds)
+      ? await supabase.from("reserva_pasajeros").select("id, asiento_id, cliente_id, precio, reserva_id").eq("estado", "activo").in("asiento_id", asientoIds)
       : { data: [] };
   const rps = rpData ?? [];
   const rpIds = rps.map((rp) => rp.id);
   const rpPorId = new Map(rps.map((rp) => [rp.id, rp]));
   const clienteIds = [...new Set(rps.map((rp) => rp.cliente_id))];
+  const reservaIds = [...new Set(rps.map((rp) => rp.reserva_id))];
 
-  const [{ data: pagosData }, { data: clientesData }] = await Promise.all([
+  const [{ data: pagosData }, { data: clientesData }, { data: reservasData }] = await Promise.all([
     rpIds.length > 0
       ? supabase.from("pagos").select("reserva_pasajero_id, monto, medio_pago, fecha").in("reserva_pasajero_id", rpIds)
       : Promise.resolve({ data: [] }),
     clienteIds.length > 0
       ? supabase.from("clientes").select("id, nombre, apellido").in("id", clienteIds)
       : Promise.resolve({ data: [] }),
+    reservaIds.length > 0
+      ? supabase.from("reservas").select("id, vendedor_id").in("id", reservaIds)
+      : Promise.resolve({ data: [] }),
   ]);
   const clientePorId = new Map((clientesData ?? []).map((c) => [c.id, c]));
+  const vendedorIdPorReserva = new Map((reservasData ?? []).map((r) => [r.id, r.vendedor_id]));
+  const vendedorIds = [...new Set((reservasData ?? []).map((r) => r.vendedor_id).filter((x): x is string => !!x))];
+  const { data: usuariosData } =
+    vendedorIds.length > 0 ? await supabase.from("usuarios").select("id, nombre").in("id", vendedorIds) : { data: [] };
+  const vendedorNombrePorId = new Map((usuariosData ?? []).map((u) => [u.id, u.nombre]));
 
   const rutaMontoMap = new Map<string, number>();
   rps.forEach((rp) => {
@@ -154,11 +164,13 @@ export async function obtenerDatosMes(mesKey: string): Promise<MesDataResult> {
     if (!servicio) return;
     total += Number(p.monto);
     const cliente = clientePorId.get(rp.cliente_id);
+    const vendedorId = vendedorIdPorReserva.get(rp.reserva_id);
     movimientos.push({
       fecha: fechaDDMMYYYY(p.fecha),
       fechaOrden: p.fecha,
       pasajero: cliente ? `${cliente.apellido}, ${cliente.nombre}` : "—",
       servicio: `${servicio.origen} → ${servicio.destino}`,
+      vendedor: vendedorId ? (vendedorNombrePorId.get(vendedorId) ?? "—") : "—",
       monto: Number(p.monto),
       medio: p.medio_pago === "efectivo" ? "Efectivo" : p.medio_pago === "transferencia" ? "Transferencia" : "Tarjeta",
     });
