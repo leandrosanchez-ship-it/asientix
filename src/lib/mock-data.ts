@@ -55,15 +55,15 @@ export const USUARIOS: Usuario[] = [
 ];
 
 export const HOTELES: Hotel[] = [
-  { id: "hotel-portal-lago", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Hotel Portal del Lago", contacto: "Silvina Roldán", telefono: "3541 42-1187" },
-  { id: "hotel-yastay", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Hotel Yastay", contacto: "Marcos Peralta", telefono: "3541 43-0092" },
-  { id: "hotel-nuevo-sayago", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Hotel Nuevo Sayago", contacto: "Carla Funes", telefono: "3541 44-7765" },
+  { id: "hotel-portal-lago", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Hotel Portal del Lago", contacto: "Silvina Roldán", telefono: "3541 42-1187", direccion: "" },
+  { id: "hotel-yastay", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Hotel Yastay", contacto: "Marcos Peralta", telefono: "3541 43-0092", direccion: "" },
+  { id: "hotel-nuevo-sayago", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Hotel Nuevo Sayago", contacto: "Carla Funes", telefono: "3541 44-7765", direccion: "" },
 ];
 
 export const ASISTENCIAS: AsistenciaViajero[] = [
-  { id: "asist-assist-card", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Assist Card", contacto: "Central de ventas", telefono: "0810 555-2728" },
-  { id: "asist-universal", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Universal Assistance", contacto: "Central de ventas", telefono: "0810 777-8632" },
-  { id: "asist-travel-ace", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Travel Ace", contacto: "Central de ventas", telefono: "0810 333-8223" },
+  { id: "asist-assist-card", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Assist Card", contacto: "Central de ventas", telefono: "0810 555-2728", topeCoberturaMoneda: null, topeCoberturaMonto: null },
+  { id: "asist-universal", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Universal Assistance", contacto: "Central de ventas", telefono: "0810 777-8632", topeCoberturaMoneda: null, topeCoberturaMonto: null },
+  { id: "asist-travel-ace", agenciaId: AGENCIA_SEQUEIRA.id, nombre: "Travel Ace", contacto: "Central de ventas", telefono: "0810 333-8223", topeCoberturaMoneda: null, topeCoberturaMonto: null },
 ];
 
 export const OBSERVACIONES: Observacion[] = [
@@ -84,11 +84,17 @@ export const SERVICIOS: Servicio[] = [
     tipoCoche: "Semi-Cama",
     unidad: "Coche 12",
     precioPasaje: 45000,
+    moneda: "ARS",
     incluyeHotel: true,
     hotelId: HOTELES[0].id,
     tiposHabitacionDisponibles: ["doble", "cuadruple"],
+    cantidadHabitaciones: null,
     incluyeAsistencia: true,
     asistenciaId: ASISTENCIAS[0].id,
+    incluyeExcursion: false,
+    excursionObservaciones: "",
+    coordinadorId: null,
+    transporteId: null,
     observacionesIds: [OBSERVACIONES[0].id, OBSERVACIONES[2].id],
   },
   {
@@ -101,11 +107,17 @@ export const SERVICIOS: Servicio[] = [
     tipoCoche: "Coche Cama",
     unidad: "Coche 8",
     precioPasaje: 52000,
+    moneda: "ARS",
     incluyeHotel: false,
     hotelId: null,
     tiposHabitacionDisponibles: [],
+    cantidadHabitaciones: null,
     incluyeAsistencia: false,
     asistenciaId: null,
+    incluyeExcursion: false,
+    excursionObservaciones: "",
+    coordinadorId: null,
+    transporteId: null,
     observacionesIds: [],
   },
   {
@@ -118,11 +130,17 @@ export const SERVICIOS: Servicio[] = [
     tipoCoche: "Semi-Cama",
     unidad: "Coche 5",
     precioPasaje: 41000,
+    moneda: "ARS",
     incluyeHotel: false,
     hotelId: null,
     tiposHabitacionDisponibles: [],
+    cantidadHabitaciones: null,
     incluyeAsistencia: false,
     asistenciaId: null,
+    incluyeExcursion: false,
+    excursionObservaciones: "",
+    coordinadorId: null,
+    transporteId: null,
     observacionesIds: [],
   },
 ];
@@ -225,6 +243,8 @@ export function generarAsientosDemo(servicioId: string): AsientosGenerados {
         agenciaId: AGENCIA_SEQUEIRA.id,
         servicioId,
         habitacionTipo: null,
+        regimenComida: null,
+        vendedorId: null,
         codigoValidacion: `AXT-${servicioId.slice(-4).toUpperCase()}-${numero}`,
       });
 
@@ -235,6 +255,7 @@ export function generarAsientosDemo(servicioId: string): AsientosGenerados {
         asientoId,
         clienteId,
         esResponsable: seed.esResponsable ?? true,
+        embarque: "",
         precio,
       });
 

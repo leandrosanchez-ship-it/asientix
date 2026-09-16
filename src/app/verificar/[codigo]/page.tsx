@@ -1,17 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { habitacionLabel as habitacionLabelFn } from "@/lib/habitacion";
+import { regimenLabel } from "@/lib/regimen";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
-
-const HABITACION_LABELS: Record<string, string> = {
-  single: "single",
-  doble: "doble",
-  triple: "triple",
-  cuadruple: "cuádruple",
-};
 
 function fechaLarga(iso: string) {
   const d = new Date(`${iso}T00:00:00`);
@@ -30,7 +25,7 @@ export default async function VerificarPage({ params }: PageProps<"/verificar/[c
 
   const { data: reserva } = await supabase
     .from("reservas")
-    .select("id, servicio_id, habitacion_tipo, codigo_validacion")
+    .select("id, servicio_id, habitacion_tipo, regimen_comida, codigo_validacion")
     .eq("codigo_validacion", codigo)
     .limit(1)
     .maybeSingle();
@@ -68,7 +63,7 @@ export default async function VerificarPage({ params }: PageProps<"/verificar/[c
       supabase.from("agencias").select("nombre").eq("id", servicio.agencia_id).single(),
       supabase
         .from("reserva_pasajeros")
-        .select("id, asiento_id, cliente_id, es_responsable")
+        .select("id, asiento_id, cliente_id, es_responsable, embarque")
         .eq("reserva_id", reserva.id)
         .eq("estado", "activo")
         .order("es_responsable", { ascending: false }),
@@ -107,14 +102,14 @@ export default async function VerificarPage({ params }: PageProps<"/verificar/[c
         asiento: asiento.numero as number,
         tipoAsiento: asiento.piso === "superior" ? "Semi-Cama" : "Cama",
         esResponsable: g.es_responsable as boolean,
+        embarque: (g.embarque as string) || null,
       };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null)
     .sort((a, b) => a.asiento - b.asiento);
 
-  const habitacionLabel = reserva.habitacion_tipo
-    ? (HABITACION_LABELS[reserva.habitacion_tipo] ?? reserva.habitacion_tipo)
-    : null;
+  const habitacionLabel = habitacionLabelFn(reserva.habitacion_tipo);
+  const regimen = regimenLabel(reserva.regimen_comida);
 
   return (
     <Shell>
@@ -144,6 +139,7 @@ export default async function VerificarPage({ params }: PageProps<"/verificar/[c
                 <div className="text-[13px] font-semibold text-ink">{p.nombre}</div>
                 <div className="text-[11px] text-ink-faint">
                   Asiento {p.asiento} · {p.tipoAsiento}
+                  {p.embarque ? ` · Embarque: ${p.embarque}` : ""}
                   {p.esResponsable ? " · Responsable de la reserva" : ""}
                 </div>
               </div>
@@ -163,6 +159,7 @@ export default async function VerificarPage({ params }: PageProps<"/verificar/[c
               <div className="rounded-lg bg-[#F4F5F7] px-3 py-2 text-[13px]">
                 <span className="font-bold text-ink">Hotel:</span> {hotel.nombre}
                 {habitacionLabel ? ` · Habitación ${habitacionLabel}` : ""}
+                {regimen ? ` · ${regimen}` : ""}
               </div>
             )}
             {asistencia && (

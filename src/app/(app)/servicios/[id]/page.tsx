@@ -7,6 +7,7 @@ import type {
   AsistenciaViajero,
   Cliente,
   Hotel,
+  Moneda,
   Observacion,
   Pago,
   Reserva,
@@ -22,7 +23,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
   const { data: s } = await supabase
     .from("servicios")
     .select(
-      "id, agencia_id, origen, destino, fecha, hora, tipo_coche, unidad, precio_pasaje, incluye_hotel, hotel_id, tipos_habitacion_disponibles, incluye_asistencia, asistencia_id, observaciones_ids",
+      "id, agencia_id, origen, destino, fecha, hora, tipo_coche, unidad, precio_pasaje, moneda, incluye_hotel, hotel_id, tipos_habitacion_disponibles, cantidad_habitaciones, incluye_asistencia, asistencia_id, incluye_excursion, excursion_observaciones, coordinador_id, transporte_id, observaciones_ids",
     )
     .eq("id", id)
     .single();
@@ -38,11 +39,17 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
     tipoCoche: s.tipo_coche,
     unidad: s.unidad ?? "",
     precioPasaje: s.precio_pasaje === null ? null : Number(s.precio_pasaje),
+    moneda: (s.moneda as Moneda) ?? "ARS",
     incluyeHotel: s.incluye_hotel,
     hotelId: s.hotel_id,
     tiposHabitacionDisponibles: s.tipos_habitacion_disponibles ?? [],
+    cantidadHabitaciones: s.cantidad_habitaciones,
     incluyeAsistencia: s.incluye_asistencia,
     asistenciaId: s.asistencia_id,
+    incluyeExcursion: s.incluye_excursion,
+    excursionObservaciones: s.excursion_observaciones ?? "",
+    coordinadorId: s.coordinador_id,
+    transporteId: s.transporte_id,
     observacionesIds: s.observaciones_ids ?? [],
   };
 
@@ -50,15 +57,15 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
     supabase.from("asientos").select("id, servicio_id, numero, piso, estado").eq("servicio_id", id),
     supabase
       .from("reservas")
-      .select("id, agencia_id, servicio_id, habitacion_tipo, codigo_validacion")
+      .select("id, agencia_id, servicio_id, habitacion_tipo, regimen_comida, vendedor_id, codigo_validacion")
       .eq("servicio_id", id),
     servicio.hotelId
-      ? supabase.from("hoteles").select("id, agencia_id, nombre, contacto, telefono").eq("id", servicio.hotelId).single()
+      ? supabase.from("hoteles").select("id, agencia_id, nombre, contacto, telefono, direccion").eq("id", servicio.hotelId).single()
       : Promise.resolve({ data: null }),
     servicio.asistenciaId
       ? supabase
           .from("asistencias_viajero")
-          .select("id, agencia_id, nombre, contacto, telefono")
+          .select("id, agencia_id, nombre, contacto, telefono, tope_cobertura_moneda, tope_cobertura_monto")
           .eq("id", servicio.asistenciaId)
           .single()
       : Promise.resolve({ data: null }),
@@ -80,6 +87,8 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
     agenciaId: r.agencia_id,
     servicioId: r.servicio_id,
     habitacionTipo: r.habitacion_tipo,
+    regimenComida: r.regimen_comida,
+    vendedorId: r.vendedor_id,
     codigoValidacion: r.codigo_validacion ?? "",
   }));
 
@@ -88,7 +97,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
     reservaIds.length > 0
       ? await supabase
           .from("reserva_pasajeros")
-          .select("id, reserva_id, asiento_id, cliente_id, es_responsable, precio")
+          .select("id, reserva_id, asiento_id, cliente_id, es_responsable, precio, embarque")
           .eq("estado", "activo")
           .in("reserva_id", reservaIds)
       : { data: [] };
@@ -100,6 +109,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
     clienteId: rp.cliente_id,
     esResponsable: rp.es_responsable,
     precio: Number(rp.precio),
+    embarque: rp.embarque ?? "",
   }));
 
   const clienteIds = [...new Set(reservaPasajeros.map((rp) => rp.clienteId))];
@@ -152,6 +162,7 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
         nombre: hotelRes.data.nombre,
         contacto: hotelRes.data.contacto ?? "",
         telefono: hotelRes.data.telefono ?? "",
+        direccion: hotelRes.data.direccion ?? "",
       }
     : null;
 
@@ -162,6 +173,8 @@ export default async function ServicioPage({ params }: PageProps<"/servicios/[id
         nombre: asistRes.data.nombre,
         contacto: asistRes.data.contacto ?? "",
         telefono: asistRes.data.telefono ?? "",
+        topeCoberturaMoneda: (asistRes.data.tope_cobertura_moneda as Moneda | null) ?? null,
+        topeCoberturaMonto: asistRes.data.tope_cobertura_monto !== null ? Number(asistRes.data.tope_cobertura_monto) : null,
       }
     : null;
 

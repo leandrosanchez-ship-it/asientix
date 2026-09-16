@@ -2,24 +2,13 @@
 
 import Link from "next/link";
 import type { Cliente } from "@/lib/types";
+export { habitacionLabel } from "@/lib/habitacion";
 
 export interface GrupoInfo {
   cantidad: number;
   asientos: number[];
   responsableNombre: string | null;
   habitacionLabel: string | null;
-}
-
-const HABITACION_LABELS: Record<string, string> = {
-  single: "single",
-  doble: "doble",
-  triple: "triple",
-  cuadruple: "cuádruple",
-};
-
-export function habitacionLabel(tipo: string | null) {
-  if (!tipo) return null;
-  return HABITACION_LABELS[tipo] ?? tipo;
 }
 
 export function SeatDetailModal({

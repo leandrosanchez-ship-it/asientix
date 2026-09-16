@@ -6,17 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { ACCENT } from "@/lib/theme";
 import { SUPERIOR_ROWS, INFERIOR_ROWS, type SeatCell } from "@/lib/seat-layout";
+import { habitacionLabel as habitacionLabelFn } from "@/lib/habitacion";
+import { regimenLabel } from "@/lib/regimen";
 const INK = "#1C1F27";
 const INK_SOFT = "#6B7280";
 const INK_FAINT = "#9AA1AC";
 const LINE = "#E3E5EA";
-
-const HABITACION_LABELS: Record<string, string> = {
-  single: "single",
-  doble: "doble",
-  triple: "triple",
-  cuadruple: "cuádruple",
-};
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -168,7 +163,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
 
   const responsable = pasajeros.find((p) => p.esResponsable) ?? pasajeros[0];
   const precioTotal = pasajeros.reduce((s, p) => s + p.precio, 0);
-  const habitacionLabel = reserva.habitacion_tipo ? (HABITACION_LABELS[reserva.habitacion_tipo] ?? reserva.habitacion_tipo) : null;
+  const habitacionLabel = habitacionLabelFn(reserva.habitacion_tipo);
 
   // El QR ahora codifica un link real a una página pública de verificación
   // (sin login) en vez del código pelado — quien lo escanea ve directamente

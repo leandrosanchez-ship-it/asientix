@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import { limpiarDni, formatTelefonoWhatsapp, capitalizarPalabras } from "@/lib/format";
 import type { PasajeroForm } from "./ReservationWizard";
-import type { CobroInicial, TipoHabitacion } from "@/lib/types";
+import type { CobroInicial, RegimenComida, TipoHabitacion } from "@/lib/types";
 
 export interface CrearReservaGrupalInput {
   servicioId: string;
@@ -13,6 +13,7 @@ export interface CrearReservaGrupalInput {
   forms: PasajeroForm[];
   responsableIdx: number;
   habitacionTipo: TipoHabitacion | null;
+  regimenComida: RegimenComida | null;
   precioPasaje: number;
   codigoValidacion: string;
   cobro: CobroInicial;
@@ -33,6 +34,8 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
       agencia_id: usuario.agenciaId,
       servicio_id: input.servicioId,
       habitacion_tipo: input.habitacionTipo,
+      regimen_comida: input.regimenComida,
+      vendedor_id: usuario.id,
       codigo_validacion: input.codigoValidacion,
     })
     .select("id")
@@ -48,46 +51,63 @@ export async function crearReservaGrupal(input: CrearReservaGrupalInput) {
 
   for (let idx = 0; idx < input.asientoIds.length; idx++) {
     const f = input.forms[idx];
-    const { data: cliente, error: clienteError } = await supabase
-      .from("clientes")
-      .insert({
-        agencia_id: usuario.agenciaId,
-        // Nombre, apellido, localidad y contacto de emergencia se guardan
-        // siempre en Mayúscula Inicial por palabra, sin importar cómo se
-        // haya tipeado ("MARIA GAETAN"/"maria gaetan" → "Maria Gaetan") —
-        // pedido explícito para no depender de que quien carga los datos
-        // use mayúsculas de forma consistente.
-        nombre: capitalizarPalabras(f.nombre),
-        apellido: capitalizarPalabras(f.apellido),
-        dni: limpiarDni(f.dni),
-        nacimiento: f.nacimiento || null,
-        telefono: f.telefono ? formatTelefonoWhatsapp(f.telefono) : "",
-        email: f.email.trim().toLowerCase(),
-        localidad: capitalizarPalabras(f.localidad),
-        emer_nombre: capitalizarPalabras(f.emerNombre),
-        emer_telefono: f.emerTelefono ? formatTelefonoWhatsapp(f.emerTelefono) : "",
-        emer_parentesco: f.emerParentesco,
-        obra_social: f.obraSocial.trim(),
-        obra_social_nro: f.obraSocialNro.trim(),
-      })
-      .select("id")
-      .single();
-    if (clienteError || !cliente) throw new Error(clienteError?.message ?? "No se pudo crear el pasajero");
+    const datosCliente = {
+      // Nombre, apellido, localidad y contacto de emergencia se guardan
+      // siempre en Mayúscula Inicial por palabra, sin importar cómo se
+      // haya tipeado ("MARIA GAETAN"/"maria gaetan" → "Maria Gaetan") —
+      // pedido explícito para no depender de que quien carga los datos
+      // use mayúsculas de forma consistente.
+      nombre: capitalizarPalabras(f.nombre),
+      apellido: capitalizarPalabras(f.apellido),
+      dni: limpiarDni(f.dni),
+      nacimiento: f.nacimiento || null,
+      telefono: f.telefono ? formatTelefonoWhatsapp(f.telefono) : "",
+      email: f.email.trim().toLowerCase(),
+      localidad: capitalizarPalabras(f.localidad),
+      emer_nombre: capitalizarPalabras(f.emerNombre),
+      emer_telefono: f.emerTelefono ? formatTelefonoWhatsapp(f.emerTelefono) : "",
+      emer_parentesco: f.emerParentesco,
+      obra_social: f.obraSocial.trim(),
+      obra_social_nro: f.obraSocialNro.trim(),
+    };
+
+    // Si se eligió un cliente ya cargado (búsqueda por DNI), se reutiliza su
+    // fila — no se crea un duplicado — y de paso se actualiza con lo que
+    // haya cambiado en el formulario.
+    let clienteId: string;
+    if (f.clienteIdExistente) {
+      const { error: updateError } = await supabase
+        .from("clientes")
+        .update(datosCliente)
+        .eq("id", f.clienteIdExistente)
+        .eq("agencia_id", usuario.agenciaId);
+      if (updateError) throw new Error(updateError.message);
+      clienteId = f.clienteIdExistente;
+    } else {
+      const { data: cliente, error: clienteError } = await supabase
+        .from("clientes")
+        .insert({ agencia_id: usuario.agenciaId, ...datosCliente })
+        .select("id")
+        .single();
+      if (clienteError || !cliente) throw new Error(clienteError?.message ?? "No se pudo crear el pasajero");
+      clienteId = cliente.id;
+    }
 
     const { data: rp, error: rpError } = await supabase
       .from("reserva_pasajeros")
       .insert({
         reserva_id: reserva.id,
         asiento_id: input.asientoIds[idx],
-        cliente_id: cliente.id,
+        cliente_id: clienteId,
         es_responsable: idx === input.responsableIdx,
         precio: input.precioPasaje,
+        embarque: capitalizarPalabras(f.embarque),
       })
       .select("id")
       .single();
     if (rpError || !rp) throw new Error(rpError?.message ?? "No se pudo crear la reserva del pasajero");
 
-    clienteIds.push(cliente.id);
+    clienteIds.push(clienteId);
     reservaPasajeroIds.push(rp.id);
   }
 

@@ -2,19 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { AsistenciaViajero, Hotel, Observacion, TipoHabitacion } from "@/lib/types";
+import type { AsistenciaViajero, Coordinador, Hotel, Moneda, Observacion, Transporte, TipoHabitacion } from "@/lib/types";
 import { crearServicio } from "./actions";
-import { crearHotel, crearAsistencia } from "../../proveedores/actions";
+import { crearHotel, crearAsistencia, crearCoordinador, crearTransporte } from "../../proveedores/actions";
 import { ACCENT } from "@/lib/theme";
+import { HABITACIONES } from "@/lib/habitacion";
 
 const NUEVO = "__nuevo__";
 const TIPOS_COCHE = ["Semi-Cama", "Cama", "Ambos"];
-const HABITACIONES: { value: TipoHabitacion; label: string }[] = [
-  { value: "single", label: "Single" },
-  { value: "doble", label: "Doble" },
-  { value: "triple", label: "Triple" },
-  { value: "cuadruple", label: "Cuádruple" },
-];
 
 interface Form {
   origen: string;
@@ -25,8 +20,13 @@ interface Form {
   unidad: string;
   asientos: string;
   precio: string;
+  moneda: Moneda;
   hotelId: string;
+  cantidadHabitaciones: string;
   asistenciaId: string;
+  coordinadorId: string;
+  transporteId: string;
+  excursionObservaciones: string;
 }
 
 function emptyForm(): Form {
@@ -39,8 +39,13 @@ function emptyForm(): Form {
     unidad: "",
     asientos: "40",
     precio: "",
+    moneda: "ARS",
     hotelId: "",
+    cantidadHabitaciones: "",
     asistenciaId: "",
+    coordinadorId: "",
+    transporteId: "",
+    excursionObservaciones: "",
   };
 }
 
@@ -100,10 +105,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export function NuevoServicioClient({
   hoteles,
   asistencias,
+  coordinadores,
+  transportes,
   observaciones,
 }: {
   hoteles: Hotel[];
   asistencias: AsistenciaViajero[];
+  coordinadores: Coordinador[];
+  transportes: Transporte[];
   observaciones: Observacion[];
 }) {
   const router = useRouter();
@@ -113,10 +122,18 @@ export function NuevoServicioClient({
   const [form, setForm] = useState<Form>(emptyForm());
   const [incluyeHotel, setIncluyeHotel] = useState(false);
   const [incluyeAsistencia, setIncluyeAsistencia] = useState(false);
+  const [incluyeExcursion, setIncluyeExcursion] = useState(false);
   const [selectedObs, setSelectedObs] = useState<string[]>([]);
   const [selectedHab, setSelectedHab] = useState<TipoHabitacion[]>([]);
   const [saved, setSaved] = useState(false);
   const [nuevoServicioId, setNuevoServicioId] = useState<string | null>(null);
+
+  const [coordinadoresLocal, setCoordinadoresLocal] = useState(coordinadores);
+  const [transportesLocal, setTransportesLocal] = useState(transportes);
+  const [nuevoCoordinador, setNuevoCoordinador] = useState({ nombre: "", apellido: "", telefono: "" });
+  const [nuevoTransporte, setNuevoTransporte] = useState({ nombre: "", contacto: "" });
+  const [mostrarNuevoCoordinador, setMostrarNuevoCoordinador] = useState(false);
+  const [mostrarNuevoTransporte, setMostrarNuevoTransporte] = useState(false);
 
   // Copias locales de las listas de Proveedores — para que un hotel/asistencia
   // cargado al vuelo aparezca al toque en el <select>, sin recargar la página.
@@ -147,8 +164,8 @@ export function NuevoServicioClient({
     setCreandoProveedor(true);
     startTransition(async () => {
       try {
-        const id = await crearHotel({ nombre: nuevoHotel.nombre, contacto: "", telefono: nuevoHotel.telefono });
-        setHotelesLocal((prev) => [...prev, { id, agenciaId: "", nombre: nuevoHotel.nombre.trim(), contacto: "", telefono: nuevoHotel.telefono }]);
+        const id = await crearHotel({ nombre: nuevoHotel.nombre, contacto: "", telefono: nuevoHotel.telefono, direccion: "" });
+        setHotelesLocal((prev) => [...prev, { id, agenciaId: "", nombre: nuevoHotel.nombre.trim(), contacto: "", telefono: nuevoHotel.telefono, direccion: "" }]);
         setField("hotelId", id);
         setNuevoHotel({ nombre: "", telefono: "" });
         setMostrarNuevoHotel(false);
@@ -166,8 +183,17 @@ export function NuevoServicioClient({
     setCreandoProveedor(true);
     startTransition(async () => {
       try {
-        const id = await crearAsistencia({ nombre: nuevaAsistencia.nombre, contacto: "", telefono: nuevaAsistencia.telefono });
-        setAsistenciasLocal((prev) => [...prev, { id, agenciaId: "", nombre: nuevaAsistencia.nombre.trim(), contacto: "", telefono: nuevaAsistencia.telefono }]);
+        const id = await crearAsistencia({
+          nombre: nuevaAsistencia.nombre,
+          contacto: "",
+          telefono: nuevaAsistencia.telefono,
+          topeCoberturaMoneda: null,
+          topeCoberturaMonto: null,
+        });
+        setAsistenciasLocal((prev) => [
+          ...prev,
+          { id, agenciaId: "", nombre: nuevaAsistencia.nombre.trim(), contacto: "", telefono: nuevaAsistencia.telefono, topeCoberturaMoneda: null, topeCoberturaMonto: null },
+        ]);
         setField("asistenciaId", id);
         setNuevaAsistencia({ nombre: "", telefono: "" });
         setMostrarNuevaAsistencia(false);
@@ -179,10 +205,49 @@ export function NuevoServicioClient({
     });
   }
 
+  function guardarNuevoCoordinador() {
+    if (!nuevoCoordinador.nombre.trim()) return;
+    setProveedorError(null);
+    setCreandoProveedor(true);
+    startTransition(async () => {
+      try {
+        const id = await crearCoordinador(nuevoCoordinador);
+        setCoordinadoresLocal((prev) => [...prev, { id, agenciaId: "", ...nuevoCoordinador }]);
+        setField("coordinadorId", id);
+        setNuevoCoordinador({ nombre: "", apellido: "", telefono: "" });
+        setMostrarNuevoCoordinador(false);
+      } catch (e) {
+        setProveedorError(e instanceof Error ? e.message : "No se pudo crear el coordinador");
+      } finally {
+        setCreandoProveedor(false);
+      }
+    });
+  }
+
+  function guardarNuevoTransporte() {
+    if (!nuevoTransporte.nombre.trim()) return;
+    setProveedorError(null);
+    setCreandoProveedor(true);
+    startTransition(async () => {
+      try {
+        const id = await crearTransporte(nuevoTransporte);
+        setTransportesLocal((prev) => [...prev, { id, agenciaId: "", ...nuevoTransporte }]);
+        setField("transporteId", id);
+        setNuevoTransporte({ nombre: "", contacto: "" });
+        setMostrarNuevoTransporte(false);
+      } catch (e) {
+        setProveedorError(e instanceof Error ? e.message : "No se pudo crear el transporte");
+      } finally {
+        setCreandoProveedor(false);
+      }
+    });
+  }
+
   function reset() {
     setForm(emptyForm());
     setIncluyeHotel(false);
     setIncluyeAsistencia(false);
+    setIncluyeExcursion(false);
     setSelectedObs([]);
     setSelectedHab([]);
     setSaved(false);
@@ -190,8 +255,12 @@ export function NuevoServicioClient({
     setError(null);
     setMostrarNuevoHotel(false);
     setMostrarNuevaAsistencia(false);
+    setMostrarNuevoCoordinador(false);
+    setMostrarNuevoTransporte(false);
     setNuevoHotel({ nombre: "", telefono: "" });
     setNuevaAsistencia({ nombre: "", telefono: "" });
+    setNuevoCoordinador({ nombre: "", apellido: "", telefono: "" });
+    setNuevoTransporte({ nombre: "", contacto: "" });
     setProveedorError(null);
   }
 
@@ -210,11 +279,17 @@ export function NuevoServicioClient({
           tipoCoche: form.tipo,
           unidad: form.unidad,
           precioPasaje: form.precio,
+          moneda: form.moneda,
           incluyeHotel,
           hotelId: form.hotelId,
           tiposHabitacionDisponibles: selectedHab,
+          cantidadHabitaciones: form.cantidadHabitaciones,
           incluyeAsistencia,
           asistenciaId: form.asistenciaId,
+          incluyeExcursion,
+          excursionObservaciones: form.excursionObservaciones,
+          coordinadorId: form.coordinadorId,
+          transporteId: form.transporteId,
           observacionesIds: selectedObs,
         });
         setNuevoServicioId(id);
@@ -280,6 +355,18 @@ export function NuevoServicioClient({
             <div className="mt-1 text-[11.5px] text-ink-faint">
               Si todavía no lo definiste, dejalo vacío — lo vas a poder cargar al vender cada asiento.
             </div>
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-ink-soft">Moneda</div>
+            <select
+              value={form.moneda}
+              onChange={(e) => setField("moneda", e.target.value as Moneda)}
+              className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-[13px] outline-none focus:border-accent"
+            >
+              <option value="ARS">Pesos (ARS)</option>
+              <option value="USD">Dólares (USD)</option>
+            </select>
+            <div className="mt-1 text-[11.5px] text-ink-faint">Define en qué moneda se ve el saldo en Cobros.</div>
           </div>
         </div>
 
@@ -395,6 +482,16 @@ export function NuevoServicioClient({
                     queda impreso en su voucher.
                   </div>
                 </div>
+
+                <div className="mt-3 max-w-[220px]">
+                  <Field
+                    label="Cantidad de habitaciones"
+                    value={form.cantidadHabitaciones}
+                    onChange={(v) => (/^\d*$/.test(v) ? setField("cantidadHabitaciones", v) : null)}
+                    placeholder="Ej. 15"
+                    type="number"
+                  />
+                </div>
               </>
             )}
           </div>
@@ -475,6 +572,168 @@ export function NuevoServicioClient({
                   </div>
                 )}
               </>
+            )}
+          </div>
+
+          {/* Excursión */}
+          <div className="rounded-[10px] border border-line p-3.5">
+            <button
+              type="button"
+              onClick={() => setIncluyeExcursion((v) => !v)}
+              className="flex w-full items-center gap-2.5 text-left"
+            >
+              <Check checked={incluyeExcursion} />
+              <span className="text-[13px] font-semibold text-ink">¿Incluye excursión?</span>
+            </button>
+            {incluyeExcursion && (
+              <div className="mt-2.5">
+                <Field
+                  label="Observaciones de la excursión"
+                  value={form.excursionObservaciones}
+                  onChange={(v) => setField("excursionObservaciones", v)}
+                  placeholder="Ej. Excursión a las Sierras, salida 9hs, incluye almuerzo"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Coordinador */}
+          <div className="rounded-[10px] border border-line p-3.5">
+            <div className="mb-2.5 text-[13px] font-semibold text-ink">Coordinador (opcional)</div>
+            <select
+              value={mostrarNuevoCoordinador ? NUEVO : form.coordinadorId}
+              onChange={(e) => {
+                if (e.target.value === NUEVO) {
+                  setMostrarNuevoCoordinador(true);
+                  setField("coordinadorId", "");
+                } else {
+                  setMostrarNuevoCoordinador(false);
+                  setField("coordinadorId", e.target.value);
+                }
+              }}
+              className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+            >
+              <option value="">Sin coordinador</option>
+              {coordinadoresLocal.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.apellido}, {c.nombre}
+                </option>
+              ))}
+              <option value={NUEVO}>+ Agregar nuevo coordinador…</option>
+            </select>
+            {mostrarNuevoCoordinador && (
+              <div className="mt-2.5 flex flex-col gap-2 rounded-lg border border-dashed border-[#C7CBD1] p-3">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                  Nuevo coordinador — queda guardado en Proveedores
+                </div>
+                <input
+                  value={nuevoCoordinador.nombre}
+                  onChange={(e) => setNuevoCoordinador((p) => ({ ...p, nombre: e.target.value }))}
+                  placeholder="Nombre"
+                  className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                />
+                <input
+                  value={nuevoCoordinador.apellido}
+                  onChange={(e) => setNuevoCoordinador((p) => ({ ...p, apellido: e.target.value }))}
+                  placeholder="Apellido"
+                  className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                />
+                <input
+                  value={nuevoCoordinador.telefono}
+                  onChange={(e) => setNuevoCoordinador((p) => ({ ...p, telefono: e.target.value }))}
+                  placeholder="Teléfono (opcional)"
+                  className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                />
+                {proveedorError && <div className="text-xs font-semibold text-red-600">{proveedorError}</div>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarNuevoCoordinador(false);
+                      setNuevoCoordinador({ nombre: "", apellido: "", telefono: "" });
+                    }}
+                    className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={guardarNuevoCoordinador}
+                    disabled={!nuevoCoordinador.nombre.trim() || creandoProveedor}
+                    style={{ background: ACCENT }}
+                    className="rounded-lg px-3.5 py-1.5 text-xs font-bold text-white disabled:opacity-55"
+                  >
+                    {creandoProveedor ? "Guardando…" : "Agregar y usar"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Transporte */}
+          <div className="rounded-[10px] border border-line p-3.5">
+            <div className="mb-2.5 text-[13px] font-semibold text-ink">Transporte (opcional)</div>
+            <select
+              value={mostrarNuevoTransporte ? NUEVO : form.transporteId}
+              onChange={(e) => {
+                if (e.target.value === NUEVO) {
+                  setMostrarNuevoTransporte(true);
+                  setField("transporteId", "");
+                } else {
+                  setMostrarNuevoTransporte(false);
+                  setField("transporteId", e.target.value);
+                }
+              }}
+              className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+            >
+              <option value="">Sin transporte</option>
+              {transportesLocal.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nombre}
+                </option>
+              ))}
+              <option value={NUEVO}>+ Agregar nuevo transporte…</option>
+            </select>
+            {mostrarNuevoTransporte && (
+              <div className="mt-2.5 flex flex-col gap-2 rounded-lg border border-dashed border-[#C7CBD1] p-3">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                  Nuevo transporte — queda guardado en Proveedores
+                </div>
+                <input
+                  value={nuevoTransporte.nombre}
+                  onChange={(e) => setNuevoTransporte((p) => ({ ...p, nombre: e.target.value }))}
+                  placeholder="Nombre"
+                  className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                />
+                <input
+                  value={nuevoTransporte.contacto}
+                  onChange={(e) => setNuevoTransporte((p) => ({ ...p, contacto: e.target.value }))}
+                  placeholder="Contacto (opcional)"
+                  className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+                />
+                {proveedorError && <div className="text-xs font-semibold text-red-600">{proveedorError}</div>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarNuevoTransporte(false);
+                      setNuevoTransporte({ nombre: "", contacto: "" });
+                    }}
+                    className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={guardarNuevoTransporte}
+                    disabled={!nuevoTransporte.nombre.trim() || creandoProveedor}
+                    style={{ background: ACCENT }}
+                    className="rounded-lg px-3.5 py-1.5 text-xs font-bold text-white disabled:opacity-55"
+                  >
+                    {creandoProveedor ? "Guardando…" : "Agregar y usar"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

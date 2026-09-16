@@ -9,6 +9,7 @@ import type {
   Hotel,
   Observacion,
   Pago,
+  RegimenComida,
   Reserva,
   ReservaPasajero,
   Servicio,
@@ -132,6 +133,7 @@ export function MapaAsientosClient({
     forms: PasajeroForm[],
     responsableIdx: number,
     habitacionTipo: TipoHabitacion | null,
+    regimenComida: RegimenComida | null,
     cobro: CobroInicial,
     precioPasajeUsado: number,
   ) {
@@ -143,6 +145,8 @@ export function MapaAsientosClient({
       agenciaId: servicio.agenciaId,
       servicioId: servicio.id,
       habitacionTipo,
+      regimenComida,
+      vendedorId: null, // lo fija el server action con el usuario logueado
       codigoValidacion,
     };
 
@@ -190,6 +194,7 @@ export function MapaAsientosClient({
         clienteId,
         esResponsable: idx === responsableIdx,
         precio: precioPasajeUsado,
+        embarque: capitalizarPalabras(form.embarque),
       });
 
       if (cobro.montoAbonado > 0) {
@@ -231,6 +236,7 @@ export function MapaAsientosClient({
       forms,
       responsableIdx,
       habitacionTipo,
+      regimenComida,
       precioPasaje: precioPasajeUsado,
       codigoValidacion,
       cobro,
@@ -457,6 +463,7 @@ export function MapaAsientosClient({
         <ReservationWizard
           cart={cart}
           precioPasaje={servicio.precioPasaje}
+          monedaServicio={servicio.moneda}
           tiposHabitacionDisponibles={servicio.incluyeHotel ? servicio.tiposHabitacionDisponibles : []}
           onCancel={() => setWizardOpen(false)}
           onFinish={onWizardFinish}

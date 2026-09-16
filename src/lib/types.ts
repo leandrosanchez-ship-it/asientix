@@ -38,6 +38,7 @@ export interface Hotel {
   nombre: string;
   contacto: string;
   telefono: string;
+  direccion: string;
 }
 
 export interface AsistenciaViajero {
@@ -46,6 +47,23 @@ export interface AsistenciaViajero {
   nombre: string;
   contacto: string;
   telefono: string;
+  topeCoberturaMoneda: Moneda | null;
+  topeCoberturaMonto: number | null;
+}
+
+export interface Coordinador {
+  id: string;
+  agenciaId: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+}
+
+export interface Transporte {
+  id: string;
+  agenciaId: string;
+  nombre: string;
+  contacto: string;
 }
 
 export interface Observacion {
@@ -55,7 +73,17 @@ export interface Observacion {
   texto: string;
 }
 
-export type TipoHabitacion = "single" | "doble" | "triple" | "cuadruple";
+export type TipoHabitacion =
+  | "single"
+  | "doble"
+  | "triple"
+  | "cuadruple"
+  | "matrimonial"
+  | "matrimonial_1"
+  | "matrimonial_2"
+  | "quintuple";
+
+export type RegimenComida = "desayuno" | "media_pension" | "pension_completa";
 
 export interface Servicio {
   id: string;
@@ -67,11 +95,17 @@ export interface Servicio {
   tipoCoche: string;
   unidad: string;
   precioPasaje: number | null; // null = todavía sin definir, se carga al vender cada asiento
+  moneda: Moneda;
   incluyeHotel: boolean;
   hotelId: string | null;
   tiposHabitacionDisponibles: TipoHabitacion[];
+  cantidadHabitaciones: number | null;
   incluyeAsistencia: boolean;
   asistenciaId: string | null;
+  incluyeExcursion: boolean;
+  excursionObservaciones: string;
+  coordinadorId: string | null;
+  transporteId: string | null;
   observacionesIds: string[];
 }
 
@@ -108,6 +142,8 @@ export interface Reserva {
   agenciaId: string;
   servicioId: string;
   habitacionTipo: TipoHabitacion | null;
+  regimenComida: RegimenComida | null;
+  vendedorId: string | null;
   codigoValidacion: string;
 }
 
@@ -118,6 +154,7 @@ export interface ReservaPasajero {
   clienteId: string;
   esResponsable: boolean;
   precio: number;
+  embarque: string;
 }
 
 export type MedioPago = "efectivo" | "transferencia" | "tarjeta";

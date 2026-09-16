@@ -14,7 +14,7 @@ async function requireAgenciaId() {
   return usuario.agenciaId;
 }
 
-export async function crearHotel(input: { nombre: string; contacto: string; telefono: string }) {
+export async function crearHotel(input: { nombre: string; contacto: string; telefono: string; direccion: string }) {
   const agenciaId = await requireAgenciaId();
   if (!input.nombre.trim()) throw new Error("El nombre es obligatorio");
 
@@ -26,6 +26,7 @@ export async function crearHotel(input: { nombre: string; contacto: string; tele
       nombre: capitalizarPalabras(input.nombre),
       contacto: capitalizarPalabras(input.contacto),
       telefono: input.telefono.trim() ? formatTelefonoWhatsapp(input.telefono) : "",
+      direccion: input.direccion.trim(),
     })
     .select("id")
     .single();
@@ -35,7 +36,13 @@ export async function crearHotel(input: { nombre: string; contacto: string; tele
   return data.id as string;
 }
 
-export async function crearAsistencia(input: { nombre: string; contacto: string; telefono: string }) {
+export async function crearAsistencia(input: {
+  nombre: string;
+  contacto: string;
+  telefono: string;
+  topeCoberturaMoneda: string | null;
+  topeCoberturaMonto: number | null;
+}) {
   const agenciaId = await requireAgenciaId();
   if (!input.nombre.trim()) throw new Error("El nombre es obligatorio");
 
@@ -47,10 +54,53 @@ export async function crearAsistencia(input: { nombre: string; contacto: string;
       nombre: capitalizarPalabras(input.nombre),
       contacto: capitalizarPalabras(input.contacto),
       telefono: input.telefono.trim() ? formatTelefonoWhatsapp(input.telefono) : "",
+      tope_cobertura_moneda: input.topeCoberturaMoneda || null,
+      tope_cobertura_monto: input.topeCoberturaMonto && input.topeCoberturaMonto > 0 ? input.topeCoberturaMonto : null,
     })
     .select("id")
     .single();
   if (error || !data) throw new Error(error?.message ?? "No se pudo crear la asistencia");
+
+  revalidatePath("/proveedores");
+  return data.id as string;
+}
+
+export async function crearCoordinador(input: { nombre: string; apellido: string; telefono: string }) {
+  const agenciaId = await requireAgenciaId();
+  if (!input.nombre.trim()) throw new Error("El nombre es obligatorio");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("coordinadores")
+    .insert({
+      agencia_id: agenciaId,
+      nombre: capitalizarPalabras(input.nombre),
+      apellido: capitalizarPalabras(input.apellido),
+      telefono: input.telefono.trim() ? formatTelefonoWhatsapp(input.telefono) : "",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "No se pudo crear el coordinador");
+
+  revalidatePath("/proveedores");
+  return data.id as string;
+}
+
+export async function crearTransporte(input: { nombre: string; contacto: string }) {
+  const agenciaId = await requireAgenciaId();
+  if (!input.nombre.trim()) throw new Error("El nombre es obligatorio");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("transportes")
+    .insert({
+      agencia_id: agenciaId,
+      nombre: capitalizarPalabras(input.nombre),
+      contacto: input.contacto.trim(),
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "No se pudo crear el transporte");
 
   revalidatePath("/proveedores");
   return data.id as string;

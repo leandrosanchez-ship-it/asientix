@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import { SUPERIOR_IDS, INFERIOR_IDS } from "@/lib/mock-data";
 import { parseArsMoney, capitalizarPalabras } from "@/lib/format";
-import type { TipoHabitacion } from "@/lib/types";
+import type { Moneda, TipoHabitacion } from "@/lib/types";
 
 export interface CrearServicioInput {
   origen: string;
@@ -15,11 +15,17 @@ export interface CrearServicioInput {
   tipoCoche: string;
   unidad: string;
   precioPasaje: string;
+  moneda: Moneda;
   incluyeHotel: boolean;
   hotelId: string;
   tiposHabitacionDisponibles: TipoHabitacion[];
+  cantidadHabitaciones: string;
   incluyeAsistencia: boolean;
   asistenciaId: string;
+  incluyeExcursion: boolean;
+  excursionObservaciones: string;
+  coordinadorId: string;
+  transporteId: string;
   observacionesIds: string[];
 }
 
@@ -50,11 +56,17 @@ export async function crearServicio(input: CrearServicioInput) {
       tipo_coche: input.tipoCoche,
       unidad: input.unidad.trim() || null,
       precio_pasaje: precioPasaje,
+      moneda: input.moneda,
       incluye_hotel: input.incluyeHotel,
       hotel_id: input.incluyeHotel && input.hotelId ? input.hotelId : null,
       tipos_habitacion_disponibles: input.incluyeHotel ? input.tiposHabitacionDisponibles : [],
+      cantidad_habitaciones: input.incluyeHotel && input.cantidadHabitaciones.trim() ? Number(input.cantidadHabitaciones) : null,
       incluye_asistencia: input.incluyeAsistencia,
       asistencia_id: input.incluyeAsistencia && input.asistenciaId ? input.asistenciaId : null,
+      incluye_excursion: input.incluyeExcursion,
+      excursion_observaciones: input.incluyeExcursion ? input.excursionObservaciones.trim() : "",
+      coordinador_id: input.coordinadorId || null,
+      transporte_id: input.transporteId || null,
       observaciones_ids: input.observacionesIds,
     })
     .select("id")

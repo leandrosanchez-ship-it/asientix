@@ -9,7 +9,9 @@ export default async function ClientesPage() {
 
   const { data: clientesData } = await supabase
     .from("clientes")
-    .select("id, nombre, apellido, dni, telefono")
+    .select(
+      "id, nombre, apellido, dni, nacimiento, telefono, email, localidad, emer_nombre, emer_telefono, emer_parentesco, obra_social, obra_social_nro",
+    )
     .order("apellido", { ascending: true });
 
   const clientes = clientesData ?? [];
@@ -59,7 +61,15 @@ export default async function ClientesPage() {
       nombre: c.nombre,
       apellido: c.apellido,
       dni: c.dni ?? "",
+      nacimiento: c.nacimiento,
       telefono: c.telefono ?? "",
+      email: c.email ?? "",
+      localidad: c.localidad ?? "",
+      emerNombre: c.emer_nombre ?? "",
+      emerTelefono: c.emer_telefono ?? "",
+      emerParentesco: c.emer_parentesco ?? "",
+      obraSocial: c.obra_social ?? "",
+      obraSocialNro: c.obra_social_nro ?? "",
       viajes: v?.cantidad ?? 0,
       ultimoViaje: v?.ultimaFecha ?? null,
     };

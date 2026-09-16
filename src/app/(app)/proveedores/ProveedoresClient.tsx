@@ -2,62 +2,105 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { AsistenciaViajero, Hotel, Observacion } from "@/lib/types";
-import { crearHotel, crearAsistencia, crearObservacion } from "./actions";
+import type { AsistenciaViajero, Coordinador, Hotel, Observacion, Transporte } from "@/lib/types";
+import { crearHotel, crearAsistencia, crearObservacion, crearCoordinador, crearTransporte } from "./actions";
 import { ACCENT } from "@/lib/theme";
 
-type Tab = "hoteles" | "asistencias" | "observaciones";
+type Tab = "hoteles" | "asistencias" | "coordinadores" | "transportes" | "observaciones";
 
-function Pill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+interface CampoDef {
+  key: string;
+  label: string;
+  placeholder?: string;
+  type?: "text" | "textarea" | "select" | "number";
+  options?: { value: string; label: string }[];
+}
+
+const CAMPOS: Record<Exclude<Tab, "observaciones">, CampoDef[]> = {
+  hoteles: [
+    { key: "nombre", label: "Nombre", placeholder: "Ej. Hotel Portal del Lago" },
+    { key: "contacto", label: "Contacto", placeholder: "Nombre de la persona de contacto" },
+    { key: "telefono", label: "Teléfono", placeholder: "351 555-0000" },
+    { key: "direccion", label: "Dirección", placeholder: "Se muestra en el voucher" },
+  ],
+  asistencias: [
+    { key: "nombre", label: "Nombre", placeholder: "Ej. Assist Card" },
+    { key: "contacto", label: "Contacto", placeholder: "Nombre de la persona de contacto" },
+    { key: "telefono", label: "Teléfono", placeholder: "351 555-0000" },
+    {
+      key: "topeCoberturaMoneda",
+      label: "Tope de cobertura — moneda",
+      type: "select",
+      options: [
+        { value: "", label: "Sin definir" },
+        { value: "ARS", label: "Pesos (ARS)" },
+        { value: "USD", label: "Dólares (USD)" },
+      ],
+    },
+    { key: "topeCoberturaMonto", label: "Tope de cobertura — importe", type: "number", placeholder: "30000" },
+  ],
+  coordinadores: [
+    { key: "nombre", label: "Nombre", placeholder: "Ej. Marcela" },
+    { key: "apellido", label: "Apellido", placeholder: "Ej. Sequeira" },
+    { key: "telefono", label: "Teléfono", placeholder: "351 555-0000" },
+  ],
+  transportes: [
+    { key: "nombre", label: "Nombre", placeholder: "Ej. Transportes del Valle" },
+    { key: "contacto", label: "Contacto", placeholder: "Teléfono, email o persona de contacto" },
+  ],
+};
+
+const TAB_LABEL: Record<Tab, { singular: string; plural: string }> = {
+  hoteles: { singular: "hotel", plural: "Hoteles" },
+  asistencias: { singular: "asistencia", plural: "Asistencia al viajero" },
+  coordinadores: { singular: "coordinador", plural: "Coordinadores" },
+  transportes: { singular: "transporte", plural: "Transporte" },
+  observaciones: { singular: "observación", plural: "Observaciones" },
+};
+
+function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       style={active ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : { color: "#6B7280" }}
-      className={`rounded-full border px-4 py-2 text-xs font-bold ${active ? "" : "border-line bg-white"}`}
+      className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-bold ${active ? "" : "border-line bg-white"}`}
     >
       {children}
     </button>
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  textarea,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  textarea?: boolean;
-}) {
+function Field({ def, value, onChange }: { def: CampoDef; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <div className="mb-1 text-xs text-ink-soft">{label}</div>
-      {textarea ? (
+      <div className="mb-1 text-xs text-ink-soft">{def.label}</div>
+      {def.type === "textarea" ? (
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={def.placeholder}
           rows={3}
           className="w-full resize-y rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
         />
-      ) : (
-        <input
+      ) : def.type === "select" ? (
+        <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-accent"
+        >
+          {def.options?.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type={def.type === "number" ? "number" : "text"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={def.placeholder}
           className="w-full rounded-lg border border-line px-2.5 py-2 text-[13px] outline-none focus:border-accent"
         />
       )}
@@ -65,13 +108,23 @@ function Field({
   );
 }
 
+function emptyForm(tab: Exclude<Tab, "observaciones">): Record<string, string> {
+  const f: Record<string, string> = {};
+  CAMPOS[tab].forEach((c) => (f[c.key] = ""));
+  return f;
+}
+
 export function ProveedoresClient({
   hotelesIniciales,
   asistenciasIniciales,
+  coordinadoresIniciales,
+  transportesIniciales,
   observacionesIniciales,
 }: {
   hotelesIniciales: Hotel[];
   asistenciasIniciales: AsistenciaViajero[];
+  coordinadoresIniciales: Coordinador[];
+  transportesIniciales: Transporte[];
   observacionesIniciales: Observacion[];
 }) {
   const router = useRouter();
@@ -79,28 +132,50 @@ export function ProveedoresClient({
 
   const [tab, setTab] = useState<Tab>("hoteles");
   const [error, setError] = useState<string | null>(null);
-
-  const [form, setForm] = useState({ nombre: "", contacto: "", telefono: "" });
+  const [form, setForm] = useState<Record<string, string>>(emptyForm("hoteles"));
   const [obsForm, setObsForm] = useState({ titulo: "", texto: "" });
 
-  const isHoteles = tab === "hoteles";
   const isObservaciones = tab === "observaciones";
-  const items = isHoteles ? hotelesIniciales : asistenciasIniciales;
+
+  const listaPorTab: Record<Tab, { nombre: string; sub: string }[]> = {
+    hoteles: hotelesIniciales.map((h) => ({ nombre: h.nombre, sub: [h.contacto, h.telefono, h.direccion].filter(Boolean).join(" · ") })),
+    asistencias: asistenciasIniciales.map((a) => ({
+      nombre: a.nombre,
+      sub: [a.contacto, a.telefono, a.topeCoberturaMonto ? `Tope ${a.topeCoberturaMoneda} ${a.topeCoberturaMonto.toLocaleString("es-AR")}` : null]
+        .filter(Boolean)
+        .join(" · "),
+    })),
+    coordinadores: coordinadoresIniciales.map((c) => ({ nombre: `${c.apellido}, ${c.nombre}`, sub: c.telefono })),
+    transportes: transportesIniciales.map((t) => ({ nombre: t.nombre, sub: t.contacto })),
+    observaciones: [],
+  };
 
   function changeTab(t: Tab) {
     setTab(t);
-    setForm({ nombre: "", contacto: "", telefono: "" });
+    if (t !== "observaciones") setForm(emptyForm(t));
     setError(null);
   }
 
   function addProveedor() {
-    if (!form.nombre) return;
+    if (tab === "observaciones") return;
+    const campos = CAMPOS[tab];
+    const requerido = campos[0].key; // nombre siempre es el primer campo y es obligatorio
+    if (!form[requerido]?.trim()) return;
     setError(null);
     startTransition(async () => {
       try {
-        if (isHoteles) await crearHotel(form);
-        else await crearAsistencia(form);
-        setForm({ nombre: "", contacto: "", telefono: "" });
+        if (tab === "hoteles") await crearHotel({ nombre: form.nombre, contacto: form.contacto, telefono: form.telefono, direccion: form.direccion });
+        else if (tab === "asistencias")
+          await crearAsistencia({
+            nombre: form.nombre,
+            contacto: form.contacto,
+            telefono: form.telefono,
+            topeCoberturaMoneda: form.topeCoberturaMoneda || null,
+            topeCoberturaMonto: form.topeCoberturaMonto ? Number(form.topeCoberturaMonto) : null,
+          });
+        else if (tab === "coordinadores") await crearCoordinador({ nombre: form.nombre, apellido: form.apellido, telefono: form.telefono });
+        else if (tab === "transportes") await crearTransporte({ nombre: form.nombre, contacto: form.contacto });
+        setForm(emptyForm(tab));
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Error inesperado");
@@ -126,20 +201,16 @@ export function ProveedoresClient({
     <div className="px-8 py-8">
       <h1 className="font-display text-[22px] font-extrabold text-ink">Proveedores</h1>
       <p className="mt-1 text-[13px] text-ink-soft">
-        Cargá una vez tus hoteles, empresas de asistencia al viajero y observaciones —
-        después quedan disponibles para elegir al dar de alta cualquier servicio.
+        Cargá una vez tus hoteles, empresas de asistencia al viajero, coordinadores, transporte y
+        observaciones — después quedan disponibles para elegir al dar de alta cualquier servicio.
       </p>
 
-      <div className="mt-[18px] flex gap-2.5">
-        <Pill active={tab === "hoteles"} onClick={() => changeTab("hoteles")}>
-          Hoteles
-        </Pill>
-        <Pill active={tab === "asistencias"} onClick={() => changeTab("asistencias")}>
-          Asistencia al viajero
-        </Pill>
-        <Pill active={tab === "observaciones"} onClick={() => changeTab("observaciones")}>
-          Observaciones
-        </Pill>
+      <div className="mt-[18px] flex flex-wrap gap-2.5">
+        {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
+          <Pill key={t} active={tab === t} onClick={() => changeTab(t)}>
+            {TAB_LABEL[t].plural}
+          </Pill>
+        ))}
       </div>
 
       {isObservaciones ? (
@@ -149,13 +220,11 @@ export function ProveedoresClient({
               Nueva observación
             </div>
             <div className="flex flex-col gap-2.5">
-              <Field label="Título" value={obsForm.titulo} onChange={(v) => setObsForm((p) => ({ ...p, titulo: v }))} placeholder="Ej. Equipaje" />
+              <Field def={{ key: "titulo", label: "Título", placeholder: "Ej. Equipaje" }} value={obsForm.titulo} onChange={(v) => setObsForm((p) => ({ ...p, titulo: v }))} />
               <Field
-                label="Texto"
+                def={{ key: "texto", label: "Texto", placeholder: "Texto que va a figurar en el voucher", type: "textarea" }}
                 value={obsForm.texto}
                 onChange={(v) => setObsForm((p) => ({ ...p, texto: v }))}
-                placeholder="Texto que va a figurar en el voucher"
-                textarea
               />
               {error && <div className="text-xs font-semibold text-red-600">{error}</div>}
               <button
@@ -181,9 +250,7 @@ export function ProveedoresClient({
               </div>
             ))}
             {observacionesIniciales.length === 0 && (
-              <div className="px-5 py-11 text-center text-[13px] text-ink-faint">
-                Todavía no cargás ninguna observación.
-              </div>
+              <div className="px-5 py-11 text-center text-[13px] text-ink-faint">Todavía no cargás ninguna observación.</div>
             )}
           </div>
         </div>
@@ -191,47 +258,37 @@ export function ProveedoresClient({
         <div className="mt-5 flex items-start gap-5">
           <div className="w-80 shrink-0 rounded-2xl border border-line bg-white p-5">
             <div className="mb-3 text-[11px] font-bold uppercase tracking-wide" style={{ color: ACCENT }}>
-              {isHoteles ? "Nuevo hotel" : "Nueva asistencia"}
+              Nuevo {TAB_LABEL[tab].singular}
             </div>
             <div className="flex flex-col gap-2.5">
-              <Field
-                label="Nombre"
-                value={form.nombre}
-                onChange={(v) => setForm((p) => ({ ...p, nombre: v }))}
-                placeholder={isHoteles ? "Ej. Hotel Portal del Lago" : "Ej. Assist Card"}
-              />
-              <Field label="Contacto" value={form.contacto} onChange={(v) => setForm((p) => ({ ...p, contacto: v }))} placeholder="Nombre de la persona de contacto" />
-              <Field label="Teléfono" value={form.telefono} onChange={(v) => setForm((p) => ({ ...p, telefono: v }))} placeholder="351 555-0000" />
+              {CAMPOS[tab].map((def) => (
+                <Field key={def.key} def={def} value={form[def.key] ?? ""} onChange={(v) => setForm((p) => ({ ...p, [def.key]: v }))} />
+              ))}
               {error && <div className="text-xs font-semibold text-red-600">{error}</div>}
               <button
                 type="button"
                 onClick={addProveedor}
-                disabled={!form.nombre || isPending}
+                disabled={!form[CAMPOS[tab][0].key]?.trim() || isPending}
                 style={{ background: ACCENT }}
                 className="mt-1 rounded-lg py-2.5 text-[13px] font-bold text-white disabled:opacity-55"
               >
-                {isPending ? "Agregando…" : isHoteles ? "Agregar hotel" : "Agregar asistencia"}
+                {isPending ? "Agregando…" : `Agregar ${TAB_LABEL[tab].singular}`}
               </button>
             </div>
           </div>
 
           <div className="flex-1 overflow-hidden rounded-2xl border border-line bg-white">
-            <div className="grid grid-cols-[1.6fr_1.3fr_1.1fr] border-b border-line bg-app px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-ink-soft">
-              <div>Nombre</div>
-              <div>Contacto</div>
-              <div>Teléfono</div>
+            <div className="border-b border-line bg-app px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-ink-soft">
+              {TAB_LABEL[tab].plural} cargados
             </div>
-            {items.map((item) => (
-              <div key={item.id} className="grid grid-cols-[1.6fr_1.3fr_1.1fr] items-center border-b border-[#EEF0F2] px-5 py-3.5">
+            {listaPorTab[tab].map((item, i) => (
+              <div key={i} className="border-b border-[#EEF0F2] px-5 py-3.5">
                 <div className="text-[13px] font-semibold text-ink">{item.nombre}</div>
-                <div className="text-[13px] text-[#4B5563]">{item.contacto}</div>
-                <div className="text-[13px] text-[#4B5563]">{item.telefono}</div>
+                {item.sub && <div className="mt-0.5 text-[13px] text-[#4B5563]">{item.sub}</div>}
               </div>
             ))}
-            {items.length === 0 && (
-              <div className="px-5 py-11 text-center text-[13px] text-ink-faint">
-                {isHoteles ? "Todavía no cargás ningún hotel." : "Todavía no cargás ninguna asistencia."}
-              </div>
+            {listaPorTab[tab].length === 0 && (
+              <div className="px-5 py-11 text-center text-[13px] text-ink-faint">Todavía no cargás ningún {TAB_LABEL[tab].singular}.</div>
             )}
           </div>
         </div>
