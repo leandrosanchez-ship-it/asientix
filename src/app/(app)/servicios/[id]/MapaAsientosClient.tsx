@@ -109,13 +109,17 @@ export function MapaAsientosClient({
       .reduce((sum, p) => sum + p.monto, 0);
   }
 
-  const floorSeats = (floor === "superior" ? SUPERIOR_IDS : INFERIOR_IDS).map((n) => seatsByNumero.get(n)!);
-  const total = floorSeats.length;
-  const ocupados = floorSeats.filter((s) => s.asiento.estado === "ocupado").length;
-  const pendientes = floorSeats.filter((s) => s.asiento.estado === "pendiente").length;
-  const libres = total - ocupados - pendientes;
   const superiorLibres = SUPERIOR_IDS.filter((n) => seatsByNumero.get(n)?.asiento.estado === "libre").length;
   const inferiorLibres = INFERIOR_IDS.filter((n) => seatsByNumero.get(n)?.asiento.estado === "libre").length;
+  const superiorSena = SUPERIOR_IDS.filter((n) => seatsByNumero.get(n)?.asiento.estado === "pendiente").length;
+  const inferiorSena = INFERIOR_IDS.filter((n) => seatsByNumero.get(n)?.asiento.estado === "pendiente").length;
+
+  // Totales del encabezado: del SERVICIO completo (los dos pisos juntos), no
+  // solo del piso que se está mirando — la seña se sacó de acá y se ve
+  // desglosada por piso más abajo, al lado de cada pestaña.
+  const totalGeneral = asientos.length;
+  const ocupadosGeneral = asientos.filter((a) => a.estado === "ocupado").length;
+  const libresGeneral = asientos.filter((a) => a.estado === "libre").length;
 
   const cartSet = useMemo(() => new Set(cart), [cart]);
 
@@ -407,10 +411,9 @@ export function MapaAsientosClient({
           </div>
         </div>
         <div className="flex gap-2.5">
-          <Stat label="Total" value={total} bg="#F4F5F7" fg="#1C1F27" />
-          <Stat label="Libres" value={libres} bg="#DCFCE7" fg="#15803D" />
-          <Stat label="Ocupados" value={ocupados} bg="#FEE2E2" fg="#B91C1C" />
-          <Stat label="Seña" value={pendientes} bg="#FEF3C7" fg="#92400E" />
+          <Stat label="Total" value={totalGeneral} bg="#F4F5F7" fg="#1C1F27" />
+          <Stat label="Libres" value={libresGeneral} bg="#DCFCE7" fg="#15803D" />
+          <Stat label="Ocupados" value={ocupadosGeneral} bg="#FEE2E2" fg="#B91C1C" />
         </div>
       </div>
 
@@ -448,10 +451,16 @@ export function MapaAsientosClient({
 
       <div className="flex items-center justify-center gap-2.5 border-b border-line bg-white px-8 py-3.5">
         <FloorTab active={floor === "superior"} onClick={() => setFloor("superior")}>
-          Piso superior · Semi cama <span className="opacity-75">({superiorLibres} libres)</span>
+          Piso superior · Semi cama{" "}
+          <span className="opacity-75">
+            ({superiorLibres} libres{superiorSena > 0 ? ` · ${superiorSena} seña` : ""})
+          </span>
         </FloorTab>
         <FloorTab active={floor === "inferior"} onClick={() => setFloor("inferior")}>
-          Piso inferior · Cama <span className="opacity-75">({inferiorLibres} libres)</span>
+          Piso inferior · Cama{" "}
+          <span className="opacity-75">
+            ({inferiorLibres} libres{inferiorSena > 0 ? ` · ${inferiorSena} seña` : ""})
+          </span>
         </FloorTab>
       </div>
 

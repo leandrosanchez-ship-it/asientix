@@ -83,7 +83,7 @@ export function SalidasClient({ salidasIniciales }: { salidasIniciales: SalidaRo
                 </div>
                 <div className="w-[220px]">
                   <div className="mb-1.5 text-xs text-ink-soft">
-                    {s.vendidos} / {s.total} vendidos
+                    {s.vendidos} / {s.total} vendidos · {s.total - s.vendidos} disponibles
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-[#EEF0F2]">
                     <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />

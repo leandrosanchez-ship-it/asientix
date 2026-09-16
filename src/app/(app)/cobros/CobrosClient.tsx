@@ -22,19 +22,23 @@ export interface FilaCobro {
   cantidadPasajeros: number;
   nombre: string;
   telefono: string;
+  servicioId: string;
   servicio: string;
+  servicioFecha: string;
+  moneda: Moneda;
   asientos: number[];
   total: number;
   pagado: number;
   saldo: number;
 }
 
-function fmt(n: number) {
-  return "$" + Math.round(n).toLocaleString("es-AR");
+function fmt(n: number, moneda: Moneda = "ARS") {
+  const simbolo = moneda === "USD" ? "US$" : "$";
+  return simbolo + Math.round(n).toLocaleString("es-AR");
 }
 
-function waLink(nombre: string, telefono: string, saldo: number, servicio: string) {
-  const mensaje = `Hola ${nombre}! Te escribimos de tu agencia para recordarte que tenés un saldo pendiente de ${fmt(saldo)} por tu pasaje (${servicio}). Cualquier consulta, quedamos a disposición. ¡Gracias!`;
+function waLink(nombre: string, telefono: string, saldo: number, moneda: Moneda, servicio: string) {
+  const mensaje = `Hola ${nombre}! Te escribimos de tu agencia para recordarte que tenés un saldo pendiente de ${fmt(saldo, moneda)} por tu pasaje (${servicio}). Cualquier consulta, quedamos a disposición. ¡Gracias!`;
   return `https://wa.me/${digitsWhatsapp(telefono)}?text=${encodeURIComponent(mensaje)}`;
 }
 
@@ -58,13 +62,34 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
     return filas.filter((f) => f.pasajero.toLowerCase().includes(q));
   }, [filas, query]);
 
-  const totalPendiente = filas.reduce((sum, f) => (pagadas[f.id] ? sum : sum + f.saldo), 0);
+  // Saldos en distintas monedas no se suman entre sí — un total pendiente
+  // "$1.234.000" que en realidad mezcla ARS y USD sería directamente falso.
+  const totalPendientePorMoneda = filas.reduce(
+    (acc, f) => {
+      if (!pagadas[f.id]) acc[f.moneda] = (acc[f.moneda] ?? 0) + f.saldo;
+      return acc;
+    },
+    {} as Record<Moneda, number>,
+  );
+
+  const gruposServicio = useMemo(() => {
+    const orden: string[] = [];
+    const porServicio = new Map<string, { servicio: string; filas: FilaCobro[] }>();
+    filtradas.forEach((f) => {
+      if (!porServicio.has(f.servicioId)) {
+        orden.push(f.servicioId);
+        porServicio.set(f.servicioId, { servicio: f.servicio, filas: [] });
+      }
+      porServicio.get(f.servicioId)!.filas.push(f);
+    });
+    return orden.map((id) => ({ servicioId: id, ...porServicio.get(id)! }));
+  }, [filtradas]);
 
   function registrar(fila: FilaCobro) {
     const monto = parseFloat(montoInputs[fila.id] ?? "");
     if (!monto || monto <= 0) return;
     if (monto > fila.saldo + 0.5) {
-      setError(`El monto no puede superar el saldo pendiente (${fmt(fila.saldo)}).`);
+      setError(`El monto no puede superar el saldo pendiente (${fmt(fila.saldo, fila.moneda)}).`);
       return;
     }
     setError(null);
@@ -114,7 +139,18 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
         </div>
         <div className="text-right">
           <div className="text-[11px] uppercase tracking-wide text-ink-faint">Total pendiente</div>
-          <div className="text-[22px] font-extrabold text-[#B91C1C]">{fmt(totalPendiente)}</div>
+          <div className="flex justify-end gap-3">
+            {(Object.entries(totalPendientePorMoneda) as [Moneda, number][])
+              .filter(([, monto]) => monto > 0)
+              .map(([moneda, monto]) => (
+                <div key={moneda} className="text-[22px] font-extrabold text-[#B91C1C]">
+                  {fmt(monto, moneda)}
+                </div>
+              ))}
+            {Object.values(totalPendientePorMoneda).every((m) => !m) && (
+              <div className="text-[22px] font-extrabold text-[#B91C1C]">$0</div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -142,36 +178,46 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
         </div>
       )}
 
-      <div className="px-8 py-5">
-        <div className="overflow-hidden rounded-[14px] border border-line bg-white">
-          <div className="grid grid-cols-[1.6fr_2fr_0.7fr_1fr_1fr_1fr_1.6fr] gap-2 border-b border-line bg-app px-5 py-3">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Pasajero</div>
-            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Servicio</div>
-            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Asientos</div>
-            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Total</div>
-            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Pagado</div>
-            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Saldo</div>
-            <div />
-          </div>
-
-          {filtradas.map((fila) => {
-            const isPaid = !!pagadas[fila.id];
-            const isExpanded = expandedId === fila.id && !isPaid;
-            return (
-              <div key={fila.id}>
-                <div className="grid grid-cols-[1.6fr_2fr_0.7fr_1fr_1fr_1fr_1.6fr] items-center gap-2 border-b border-[#EEF0F2] px-5 py-3.5 text-[13px]">
-                  <div className="font-semibold text-ink">{fila.pasajero}</div>
-                  <div className="text-[#4B5563]">{fila.servicio}</div>
-                  <div className="text-[#4B5563]">{fila.asientos.join(", ")}</div>
-                  <div className="text-[#4B5563]">{fmt(fila.total)}</div>
-                  <div className="text-[#4B5563]">{fmt(fila.pagado)}</div>
-                  <div className="font-bold" style={{ color: isPaid ? "#15803D" : "#B91C1C" }}>
-                    {fmt(fila.saldo)}
+      <div className="px-8 py-5 flex flex-col gap-5">
+        {gruposServicio.map((grupo) => {
+          const saldoServicio = grupo.filas.reduce((s, f) => (pagadas[f.id] ? s : s + f.saldo), 0);
+          const monedaServicio = grupo.filas[0]?.moneda ?? "ARS";
+          return (
+            <div key={grupo.servicioId} className="overflow-hidden rounded-[14px] border border-line bg-white">
+              <div className="flex items-center justify-between border-b border-line bg-app px-5 py-3">
+                <div className="text-[13px] font-bold text-ink">{grupo.servicio}</div>
+                {saldoServicio > 0 && (
+                  <div className="text-[13px] font-bold text-[#B91C1C]">
+                    Pendiente: {fmt(saldoServicio, monedaServicio)}
                   </div>
-                  <div className="flex items-center justify-end gap-2">
+                )}
+              </div>
+              <div className="grid grid-cols-[1.8fr_0.7fr_1fr_1fr_1fr_1.6fr] gap-2 border-b border-line bg-[#FBFBFA] px-5 py-2">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Pasajero</div>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Asientos</div>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Total</div>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Pagado</div>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Saldo</div>
+                <div />
+              </div>
+
+              {grupo.filas.map((fila) => {
+                const isPaid = !!pagadas[fila.id];
+                const isExpanded = expandedId === fila.id && !isPaid;
+                return (
+                  <div key={fila.id}>
+                    <div className="grid grid-cols-[1.8fr_0.7fr_1fr_1fr_1fr_1.6fr] items-center gap-2 border-b border-[#EEF0F2] px-5 py-3.5 text-[13px]">
+                      <div className="font-semibold text-ink">{fila.pasajero}</div>
+                      <div className="text-[#4B5563]">{fila.asientos.join(", ")}</div>
+                      <div className="text-[#4B5563]">{fmt(fila.total, fila.moneda)}</div>
+                      <div className="text-[#4B5563]">{fmt(fila.pagado, fila.moneda)}</div>
+                      <div className="font-bold" style={{ color: isPaid ? "#15803D" : "#B91C1C" }}>
+                        {fmt(fila.saldo, fila.moneda)}
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
                     {!isPaid && fila.telefono && (
                       <a
-                        href={waLink(fila.nombre, fila.telefono, fila.saldo, fila.servicio)}
+                        href={waLink(fila.nombre, fila.telefono, fila.saldo, fila.moneda, fila.servicio)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg text-white"
@@ -217,7 +263,7 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
                     <input
                       value={montoInputs[fila.id] ?? ""}
                       onChange={(e) => setMontoInputs((prev) => ({ ...prev, [fila.id]: e.target.value }))}
-                      placeholder={`Monto a registrar (máx. ${fmt(fila.saldo)})`}
+                      placeholder={`Monto a registrar (máx. ${fmt(fila.saldo, fila.moneda)})`}
                       className="w-[220px] rounded-lg border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
                     />
                     <select
@@ -261,15 +307,17 @@ export function CobrosClient({ filasIniciales }: { filasIniciales: FilaCobro[] }
               </div>
             );
           })}
-
-          {filtradas.length === 0 && (
-            <div className="px-5 py-11 text-center text-[13px] text-ink-faint">
-              {filas.length === 0
-                ? "No hay saldos pendientes — todos los pasajeros están al día."
-                : "No se encontraron pasajeros con esos datos."}
             </div>
-          )}
-        </div>
+          );
+        })}
+
+        {filtradas.length === 0 && (
+          <div className="rounded-[14px] border border-line bg-white px-5 py-11 text-center text-[13px] text-ink-faint">
+            {filas.length === 0
+              ? "No hay saldos pendientes — todos los pasajeros están al día."
+              : "No se encontraron pasajeros con esos datos."}
+          </div>
+        )}
       </div>
     </div>
   );

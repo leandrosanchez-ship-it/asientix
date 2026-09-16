@@ -46,7 +46,7 @@ export default async function CobrosPage() {
         ? supabase.from("asientos").select("id, numero, servicio_id").in("id", asientoIds)
         : Promise.resolve({ data: [] }),
       servicioIds.length > 0
-        ? supabase.from("servicios").select("id, origen, destino, fecha").in("id", servicioIds)
+        ? supabase.from("servicios").select("id, origen, destino, fecha, moneda").in("id", servicioIds)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -93,7 +93,10 @@ export default async function CobrosPage() {
       cantidadPasajeros: grupo.length,
       nombre: clienteResp?.nombre ?? "",
       telefono: clienteResp?.telefono ?? "",
+      servicioId: servicio?.id ?? "—",
       servicio: servicio ? `${servicio.origen} → ${servicio.destino} · ${formatFechaCorta(servicio.fecha)}` : "—",
+      servicioFecha: servicio?.fecha ?? "",
+      moneda: (servicio?.moneda as "ARS" | "USD") ?? "ARS",
       asientos,
       total,
       pagado,
@@ -101,7 +104,9 @@ export default async function CobrosPage() {
     });
   }
 
-  filas.sort((a, b) => b.saldo - a.saldo);
+  // Se agrupan por servicio (una sección por salida), cada sección ordenada
+  // por la salida más próxima primero; dentro de cada una, mayor deuda primero.
+  filas.sort((a, b) => (a.servicioFecha < b.servicioFecha ? -1 : a.servicioFecha > b.servicioFecha ? 1 : b.saldo - a.saldo));
 
   return <CobrosClient filasIniciales={filas} />;
 }
