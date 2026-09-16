@@ -4,6 +4,7 @@ import PDFDocument from "pdfkit";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import { ACCENT } from "@/lib/theme";
+import { habitacionLabel } from "@/lib/habitacion";
 
 const INK = "#1C1F27";
 const INK_SOFT = "#6B7280";
@@ -23,24 +24,154 @@ const COLUMN_LABELS: Record<string, string> = {
   nombre: "Nombre",
   apellido: "Apellido",
   dni: "DNI",
-  telefono: "Teléfono",
   asiento: "Asiento",
   emergencia: "Contacto de emergencia",
-  localidad: "Localidad",
-  obraSocial: "Obra social",
+  embarque: "Embarque",
+  fechaNacimiento: "Fecha de nacimiento",
+  edad: "Edad",
+  habitacion: "Habitación",
 };
 
 // Ancho relativo de cada columna dentro de la tabla (suman ~1).
 const COLUMN_WIDTHS: Record<string, number> = {
-  nombre: 0.16,
-  apellido: 0.16,
-  dni: 0.13,
-  telefono: 0.13,
+  nombre: 0.15,
+  apellido: 0.15,
+  dni: 0.12,
   asiento: 0.08,
-  emergencia: 0.22,
-  localidad: 0.14,
-  obraSocial: 0.14,
+  emergencia: 0.2,
+  embarque: 0.13,
+  fechaNacimiento: 0.13,
+  edad: 0.07,
+  habitacion: 0.12,
 };
+
+function calcularEdad(nacimientoIso: string | null): string {
+  if (!nacimientoIso) return "—";
+  const hoy = new Date();
+  const nac = new Date(`${nacimientoIso}T00:00:00`);
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const noCumplioAun = hoy.getMonth() < nac.getMonth() || (hoy.getMonth() === nac.getMonth() && hoy.getDate() < nac.getDate());
+  if (noCumplioAun) edad -= 1;
+  return edad >= 0 ? String(edad) : "—";
+}
+
+function formatFechaNacimiento(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+export interface MovimientoMes {
+  fecha: string;
+  fechaOrden: string;
+  pasajero: string;
+  servicio: string;
+  monto: number;
+  medio: string;
+}
+
+export interface MesDataResult {
+  total: number;
+  pasajes: number;
+  servicios: number;
+  rutas: { nombre: string; monto: number; pct: number }[];
+  movimientos: MovimientoMes[];
+}
+
+function fechaDDMMYYYY(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/**
+ * Trae y agrupa los datos de UN solo mes (mesKey = "YYYY-MM"), en vez de
+ * recorrer el historial completo de la agencia como hacía antes la página
+ * de Reportes en cada visita — eso escalaba mal (recalculaba TODOS los
+ * meses de vida de la agencia en cada carga, aunque solo se mostrara uno).
+ * Ahora cada mes se trae bajo demanda, filtrando por servicios.fecha desde
+ * la base — no en JS después de traer todo.
+ */
+export async function obtenerDatosMes(mesKey: string): Promise<MesDataResult> {
+  const usuario = await getCurrentUser();
+  if (!usuario || !usuario.agenciaId || !tienePermiso(usuario, "reportes")) throw new Error("No autorizado");
+
+  const supabase = await createClient();
+  const [y, m] = mesKey.split("-").map(Number);
+  const desde = `${mesKey}-01`;
+  const hastaDate = new Date(y, m, 1); // primer día del mes siguiente
+  const hasta = `${hastaDate.getFullYear()}-${String(hastaDate.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const { data: serviciosData } = await supabase
+    .from("servicios")
+    .select("id, origen, destino, fecha")
+    .eq("agencia_id", usuario.agenciaId)
+    .gte("fecha", desde)
+    .lt("fecha", hasta);
+  const servicios = serviciosData ?? [];
+  if (servicios.length === 0) return { total: 0, pasajes: 0, servicios: 0, rutas: [], movimientos: [] };
+
+  const servicioPorId = new Map(servicios.map((s) => [s.id, s]));
+  const servicioIds = servicios.map((s) => s.id);
+
+  const { data: asientosData } = await supabase.from("asientos").select("id, servicio_id").in("servicio_id", servicioIds);
+  const servicioPorAsiento = new Map((asientosData ?? []).map((a) => [a.id, a.servicio_id]));
+  const asientoIds = (asientosData ?? []).map((a) => a.id);
+
+  const { data: rpData } =
+    asientoIds.length > 0
+      ? await supabase.from("reserva_pasajeros").select("id, asiento_id, cliente_id, precio").eq("estado", "activo").in("asiento_id", asientoIds)
+      : { data: [] };
+  const rps = rpData ?? [];
+  const rpIds = rps.map((rp) => rp.id);
+  const rpPorId = new Map(rps.map((rp) => [rp.id, rp]));
+  const clienteIds = [...new Set(rps.map((rp) => rp.cliente_id))];
+
+  const [{ data: pagosData }, { data: clientesData }] = await Promise.all([
+    rpIds.length > 0
+      ? supabase.from("pagos").select("reserva_pasajero_id, monto, medio_pago, fecha").in("reserva_pasajero_id", rpIds)
+      : Promise.resolve({ data: [] }),
+    clienteIds.length > 0
+      ? supabase.from("clientes").select("id, nombre, apellido").in("id", clienteIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const clientePorId = new Map((clientesData ?? []).map((c) => [c.id, c]));
+
+  const rutaMontoMap = new Map<string, number>();
+  rps.forEach((rp) => {
+    const servicioId = servicioPorAsiento.get(rp.asiento_id);
+    const servicio = servicioId ? servicioPorId.get(servicioId) : undefined;
+    if (!servicio) return;
+    rutaMontoMap.set(servicio.destino, (rutaMontoMap.get(servicio.destino) ?? 0) + Number(rp.precio));
+  });
+
+  const movimientos: MovimientoMes[] = [];
+  let total = 0;
+  (pagosData ?? []).forEach((p) => {
+    const rp = rpPorId.get(p.reserva_pasajero_id);
+    if (!rp) return;
+    const servicioId = servicioPorAsiento.get(rp.asiento_id);
+    const servicio = servicioId ? servicioPorId.get(servicioId) : undefined;
+    if (!servicio) return;
+    total += Number(p.monto);
+    const cliente = clientePorId.get(rp.cliente_id);
+    movimientos.push({
+      fecha: fechaDDMMYYYY(p.fecha),
+      fechaOrden: p.fecha,
+      pasajero: cliente ? `${cliente.apellido}, ${cliente.nombre}` : "—",
+      servicio: `${servicio.origen} → ${servicio.destino}`,
+      monto: Number(p.monto),
+      medio: p.medio_pago === "efectivo" ? "Efectivo" : p.medio_pago === "transferencia" ? "Transferencia" : "Tarjeta",
+    });
+  });
+  movimientos.sort((a, b) => (a.fechaOrden < b.fechaOrden ? 1 : -1));
+
+  const maxRuta = Math.max(1, ...rutaMontoMap.values());
+  const rutas = [...rutaMontoMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([nombre, monto]) => ({ nombre, monto, pct: Math.max(Math.round((monto / maxRuta) * 100), 4) }));
+
+  return { total, pasajes: rps.length, servicios: servicios.length, rutas, movimientos };
+}
 
 export interface GenerarListaPasajerosInput {
   servicioId: string;
@@ -73,20 +204,26 @@ export async function generarListaPasajerosPdf(input: GenerarListaPasajerosInput
     asientoIds.length > 0
       ? await supabase
           .from("reserva_pasajeros")
-          .select("asiento_id, cliente_id")
+          .select("asiento_id, cliente_id, reserva_id, embarque")
           .eq("estado", "activo")
           .in("asiento_id", asientoIds)
       : { data: [] };
   const clienteIds = (rpData ?? []).map((rp) => rp.cliente_id);
+  const reservaIds = [...new Set((rpData ?? []).map((rp) => rp.reserva_id))];
 
-  const { data: clientesData } =
+  const [{ data: clientesData }, { data: reservasData }] = await Promise.all([
     clienteIds.length > 0
-      ? await supabase
+      ? supabase
           .from("clientes")
-          .select("id, nombre, apellido, dni, telefono, localidad, emer_nombre, emer_telefono, emer_parentesco, obra_social, obra_social_nro")
+          .select("id, nombre, apellido, dni, nacimiento, emer_nombre, emer_telefono, emer_parentesco")
           .in("id", clienteIds)
-      : { data: [] };
+      : Promise.resolve({ data: [] }),
+    reservaIds.length > 0
+      ? supabase.from("reservas").select("id, habitacion_tipo").in("id", reservaIds)
+      : Promise.resolve({ data: [] }),
+  ]);
   const clientePorId = new Map((clientesData ?? []).map((c) => [c.id, c]));
+  const habitacionPorReserva = new Map((reservasData ?? []).map((r) => [r.id, r.habitacion_tipo]));
 
   const filas = (rpData ?? [])
     .map((rp) => {
@@ -94,16 +231,16 @@ export async function generarListaPasajerosPdf(input: GenerarListaPasajerosInput
       const numero = asientoPorId.get(rp.asiento_id);
       if (!cliente || numero === undefined) return null;
       const emergencia = [cliente.emer_nombre, cliente.emer_telefono, cliente.emer_parentesco].filter(Boolean).join(" · ");
-      const obraSocial = [cliente.obra_social, cliente.obra_social_nro].filter(Boolean).join(" · ");
       const valores: Record<string, string> = {
         nombre: cliente.nombre || "",
         apellido: cliente.apellido || "",
         dni: cliente.dni || "",
-        telefono: cliente.telefono || "",
         asiento: String(numero),
         emergencia: emergencia || "—",
-        localidad: cliente.localidad || "—",
-        obraSocial: obraSocial || "—",
+        embarque: rp.embarque || "—",
+        fechaNacimiento: formatFechaNacimiento(cliente.nacimiento),
+        edad: calcularEdad(cliente.nacimiento),
+        habitacion: habitacionLabel(habitacionPorReserva.get(rp.reserva_id) ?? null) ?? "—",
       };
       return { numero, valores };
     })

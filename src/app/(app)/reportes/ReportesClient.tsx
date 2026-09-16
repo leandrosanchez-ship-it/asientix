@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Toast } from "@/components/Toast";
 import { descargarListaPasajerosPdf } from "@/lib/descargar-lista-pasajeros";
+import { obtenerDatosMes } from "./actions";
 import { ACCENT } from "@/lib/theme";
 
 export interface Movimiento {
@@ -39,11 +40,12 @@ const COLUMN_DEFS: { key: string; label: string }[] = [
   { key: "nombre", label: "Nombre" },
   { key: "apellido", label: "Apellido" },
   { key: "dni", label: "DNI" },
-  { key: "telefono", label: "Teléfono" },
   { key: "asiento", label: "Asiento" },
   { key: "emergencia", label: "Contacto de emergencia" },
-  { key: "localidad", label: "Localidad" },
-  { key: "obraSocial", label: "Obra social" },
+  { key: "embarque", label: "Embarque" },
+  { key: "fechaNacimiento", label: "Fecha de nacimiento" },
+  { key: "edad", label: "Edad" },
+  { key: "habitacion", label: "Habitación" },
 ];
 
 const PLANTILLA_LABELS: Record<Plantilla, string> = {
@@ -53,9 +55,9 @@ const PLANTILLA_LABELS: Record<Plantilla, string> = {
 };
 
 const COLUMNAS_DEFAULT: Record<Plantilla, string[]> = {
-  coordinador: ["nombre", "apellido", "dni", "telefono", "asiento", "emergencia", "localidad", "obraSocial"],
+  coordinador: ["nombre", "apellido", "dni", "asiento", "emergencia", "embarque", "fechaNacimiento", "edad", "habitacion"],
   colectivo: ["nombre", "apellido", "dni"],
-  hotel: ["nombre", "apellido", "dni", "telefono", "localidad"],
+  hotel: ["nombre", "apellido", "dni", "habitacion", "fechaNacimiento"],
 };
 
 function TabPlantilla({
@@ -91,22 +93,39 @@ function Check({ checked }: { checked: boolean }) {
   );
 }
 
+const MES_VACIO: MesData = { total: 0, pasajes: 0, servicios: 0, rutas: [], movimientos: [] };
+
 export function ReportesClient({
-  porMes,
+  mesInicial,
+  datosMesInicial,
   mesesOptions,
   serviciosOptions,
 }: {
-  porMes: Record<string, MesData>;
+  mesInicial: string | null;
+  datosMesInicial: MesData | null;
   mesesOptions: { value: string; label: string }[];
   serviciosOptions: ServicioOption[];
 }) {
-  const [mes, setMes] = useState(mesesOptions[0]?.value ?? "");
+  const [mes, setMes] = useState(mesInicial ?? "");
+  // Caché de meses ya pedidos — cambiar de mes en el selector no vuelve a
+  // pegarle al server si ya se trajo antes en esta misma visita.
+  const [cache, setCache] = useState<Record<string, MesData>>(mesInicial && datosMesInicial ? { [mesInicial]: datosMesInicial } : {});
+  const [cargandoMes, setCargandoMes] = useState(false);
   const [plantilla, setPlantilla] = useState<Plantilla>("coordinador");
   const [columnasPorPlantilla, setColumnasPorPlantilla] = useState(COLUMNAS_DEFAULT);
   const [servicioExport, setServicioExport] = useState(serviciosOptions[0]?.id ?? "");
   const [exportToast, setExportToast] = useState<string | null>(null);
 
-  const d: MesData = porMes[mes] ?? { total: 0, pasajes: 0, servicios: 0, rutas: [], movimientos: [] };
+  function cambiarMes(nuevoMes: string) {
+    setMes(nuevoMes);
+    if (cache[nuevoMes]) return;
+    setCargandoMes(true);
+    obtenerDatosMes(nuevoMes)
+      .then((datos) => setCache((prev) => ({ ...prev, [nuevoMes]: datos })))
+      .finally(() => setCargandoMes(false));
+  }
+
+  const d: MesData = cache[mes] ?? MES_VACIO;
   const ticketProm = d.pasajes > 0 ? d.total / d.pasajes : 0;
 
   const columnasActivas = columnasPorPlantilla[plantilla];
@@ -142,7 +161,7 @@ export function ReportesClient({
             <div className="mb-1 text-[11px] uppercase tracking-wide text-ink-faint">Mes</div>
             <select
               value={mes}
-              onChange={(e) => setMes(e.target.value)}
+              onChange={(e) => cambiarMes(e.target.value)}
               className="rounded-lg border border-line bg-white px-3.5 py-2.5 text-[13px] font-semibold outline-none focus:border-accent"
             >
               {mesesOptions.map((o) => (
@@ -161,7 +180,7 @@ export function ReportesClient({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-4 gap-3.5 px-8 pt-[22px]">
+          <div className="grid grid-cols-4 gap-3.5 px-8 pt-[22px]" style={{ opacity: cargandoMes ? 0.5 : 1 }}>
             <KpiCard label="Total facturado" value={fmt(d.total)} />
             <KpiCard label="Pasajes vendidos" value={String(d.pasajes)} />
             <KpiCard label="Servicios realizados" value={String(d.servicios)} />
