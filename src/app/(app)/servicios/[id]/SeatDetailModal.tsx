@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { Cliente } from "@/lib/types";
+import type { Cliente, Moneda } from "@/lib/types";
+import { formatMonto } from "@/lib/format";
 export { habitacionLabel } from "@/lib/habitacion";
 
 export interface GrupoInfo {
@@ -16,6 +17,7 @@ export function SeatDetailModal({
   cliente,
   saldo,
   precioTotal,
+  moneda,
   grupo,
   accent,
   servicioId,
@@ -31,6 +33,7 @@ export function SeatDetailModal({
   cliente: Cliente;
   saldo: number;
   precioTotal: number;
+  moneda: Moneda;
   grupo: GrupoInfo | null;
   accent: string;
   servicioId: string;
@@ -98,7 +101,7 @@ export function SeatDetailModal({
                   : "Saldo pendiente"}
             </div>
             <div className="mt-0.5 text-sm font-extrabold" style={{ color: pagado ? "#15803D" : "#92400E" }}>
-              {pagado ? `$${precioTotal.toLocaleString("es-AR")} · pasaje completo` : `$${saldo.toLocaleString("es-AR")}`}
+              {pagado ? `${formatMonto(precioTotal, moneda)} · pasaje completo` : formatMonto(saldo, moneda)}
             </div>
           </div>
           {pagado ? (

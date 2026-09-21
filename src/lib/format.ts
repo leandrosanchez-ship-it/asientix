@@ -3,6 +3,19 @@
 // pantalla que lo lea después (voucher, WhatsApp, listados) no tiene que
 // repetir la limpieza.
 
+import type { Moneda } from "./types";
+
+/**
+ * "$45.000" para ARS, "US$45.000" para USD — nunca hardcodear el símbolo "$"
+ * a secas en una pantalla que puede mostrar un servicio en dólares (ver
+ * Cobros, que ya lo hacía bien; este helper solo saca ese patrón a un solo
+ * lugar para que las demás pantallas de plata no lo repitan mal).
+ */
+export function formatMonto(n: number, moneda: Moneda = "ARS"): string {
+  const simbolo = moneda === "USD" ? "US$" : "$";
+  return simbolo + Math.round(n).toLocaleString("es-AR");
+}
+
 /** DNI sin puntos, sin espacios — "30.123.456" y "30123456" guardan igual. */
 export function limpiarDni(dni: string): string {
   return dni.replace(/[.\s]/g, "").trim();

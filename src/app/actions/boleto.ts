@@ -8,6 +8,8 @@ import { ACCENT } from "@/lib/theme";
 import { SUPERIOR_ROWS, INFERIOR_ROWS, type SeatCell } from "@/lib/seat-layout";
 import { habitacionLabel as habitacionLabelFn } from "@/lib/habitacion";
 import { regimenLabel } from "@/lib/regimen";
+import { formatMonto } from "@/lib/format";
+import type { Moneda } from "@/lib/types";
 const INK = "#1C1F27";
 const INK_SOFT = "#6B7280";
 const INK_FAINT = "#9AA1AC";
@@ -19,10 +21,6 @@ const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "O
 function fechaLarga(iso: string) {
   const d = new Date(`${iso}T00:00:00`);
   return `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function fmtMoney(n: number) {
-  return "$" + Math.round(n).toLocaleString("es-AR");
 }
 
 // Mini-mapa de ubicación: pinta los mismos casilleros del piso real
@@ -103,7 +101,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   const { data: servicio } = await supabase
     .from("servicios")
     .select(
-      "origen, destino, fecha, hora, tipo_coche, unidad, hotel_id, asistencia_id, coordinador_id, transporte_id, observaciones_ids, agencia_id",
+      "origen, destino, fecha, hora, tipo_coche, unidad, moneda, hotel_id, asistencia_id, coordinador_id, transporte_id, observaciones_ids, agencia_id",
     )
     .eq("id", reserva.servicio_id)
     .single();
@@ -180,6 +178,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
 
   const responsable = pasajeros.find((p) => p.esResponsable) ?? pasajeros[0];
   const precioTotal = pasajeros.reduce((s, p) => s + p.precio, 0);
+  const moneda = (servicio.moneda as Moneda | null) ?? "ARS";
   const habitacionLabel = habitacionLabelFn(reserva.habitacion_tipo);
   const regimen = regimenLabel(reserva.regimen_comida);
 
@@ -329,7 +328,7 @@ export async function generarBoletoPdf(input: { reservaPasajeroId: string }) {
   const colWidth = pageWidth / 2;
   const rowY = doc.y;
   doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("PRECIO TOTAL", 32, rowY);
-  doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(fmtMoney(precioTotal), 32, rowY + 12);
+  doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(formatMonto(precioTotal, moneda), 32, rowY + 12);
   doc.fillColor(INK_FAINT).fontSize(7).font("Helvetica-Bold").text("EMITIDO", 32 + colWidth, rowY);
   doc.fillColor(INK).fontSize(10).font("Helvetica-Bold").text(
     new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }),

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cancelarPasajero, reprogramarPasajero } from "./actions";
 import { ACCENT } from "@/lib/theme";
+import { formatMonto } from "@/lib/format";
+import type { Moneda } from "@/lib/types";
 
 export type EstadoPasajero = "activo" | "cancelado" | "reprogramado";
 
@@ -20,10 +22,6 @@ export interface EventoHistorial {
 
 const MOTIVOS = ["Cliente desistió", "Cambio de planes", "Error de carga", "Otro"];
 
-function fmt(n: number) {
-  return "$" + Math.round(n).toLocaleString("es-AR");
-}
-
 export function CancelacionClient({
   servicioId,
   rpId,
@@ -32,6 +30,7 @@ export function CancelacionClient({
   servicioLabel,
   estadoInicial,
   saldoPagado,
+  moneda,
   proximasSalidas,
   historialInicial,
 }: {
@@ -42,6 +41,7 @@ export function CancelacionClient({
   servicioLabel: string;
   estadoInicial: EstadoPasajero;
   saldoPagado: number;
+  moneda: Moneda;
   proximasSalidas: ServicioOption[];
   historialInicial: EventoHistorial[];
 }) {
@@ -184,7 +184,7 @@ export function CancelacionClient({
                         )}
                       </span>
                       <span className="text-[13px] text-ink">
-                        Marcar el saldo pagado ({fmt(saldoPagado)}) como reembolsado
+                        Marcar el saldo pagado ({formatMonto(saldoPagado, moneda)}) como reembolsado
                       </span>
                     </button>
                   )}

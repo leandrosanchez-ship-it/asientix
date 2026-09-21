@@ -5,6 +5,8 @@ import { Toast } from "@/components/Toast";
 import { descargarListaPasajerosPdf } from "@/lib/descargar-lista-pasajeros";
 import { obtenerDatosMes } from "./actions";
 import { ACCENT } from "@/lib/theme";
+import { formatMonto } from "@/lib/format";
+import type { Moneda } from "@/lib/types";
 
 export interface Movimiento {
   fecha: string; // dd/mm/yyyy, para mostrar
@@ -13,14 +15,16 @@ export interface Movimiento {
   servicio: string;
   vendedor: string;
   monto: number;
+  moneda: Moneda;
   medio: string;
 }
 
 export interface MesData {
-  total: number;
+  total: Record<Moneda, number>;
   pasajes: number;
+  pasajesPorMoneda: Record<Moneda, number>;
   servicios: number;
-  rutas: { nombre: string; monto: number; pct: number }[];
+  rutas: { nombre: string; monto: number; moneda: Moneda; pct: number }[];
   movimientos: Movimiento[];
 }
 
@@ -31,8 +35,11 @@ export interface ServicioOption {
   fecha: string;
 }
 
-function fmt(n: number) {
-  return "$" + Math.round(n).toLocaleString("es-AR");
+/** "$140" · "US$60" para el mismo total, o "$0" si no hubo facturación en ninguna moneda. */
+function KpiValue({ porMoneda }: { porMoneda: Record<Moneda, number> }) {
+  const entradas = (Object.entries(porMoneda) as [Moneda, number][]).filter(([, n]) => n !== 0);
+  if (entradas.length === 0) return <>{formatMonto(0)}</>;
+  return <>{entradas.map(([moneda, n]) => formatMonto(n, moneda)).join(" · ")}</>;
 }
 
 type Plantilla = "coordinador" | "colectivo" | "hotel";
@@ -94,7 +101,14 @@ function Check({ checked }: { checked: boolean }) {
   );
 }
 
-const MES_VACIO: MesData = { total: 0, pasajes: 0, servicios: 0, rutas: [], movimientos: [] };
+const MES_VACIO: MesData = {
+  total: { ARS: 0, USD: 0 },
+  pasajes: 0,
+  pasajesPorMoneda: { ARS: 0, USD: 0 },
+  servicios: 0,
+  rutas: [],
+  movimientos: [],
+};
 
 export function ReportesClient({
   mesInicial,
@@ -127,7 +141,10 @@ export function ReportesClient({
   }
 
   const d: MesData = cache[mes] ?? MES_VACIO;
-  const ticketProm = d.pasajes > 0 ? d.total / d.pasajes : 0;
+  const ticketProm: Record<Moneda, number> = {
+    ARS: d.pasajesPorMoneda.ARS > 0 ? d.total.ARS / d.pasajesPorMoneda.ARS : 0,
+    USD: d.pasajesPorMoneda.USD > 0 ? d.total.USD / d.pasajesPorMoneda.USD : 0,
+  };
 
   // Filtro "ventas por vendedor": quién hizo cada reserva queda registrado
   // al vender (crearReservaGrupal guarda el usuario logueado) — acá se
@@ -189,20 +206,20 @@ export function ReportesClient({
       ) : (
         <>
           <div className="grid grid-cols-4 gap-3.5 px-8 pt-[22px]" style={{ opacity: cargandoMes ? 0.5 : 1 }}>
-            <KpiCard label="Total facturado" value={fmt(d.total)} />
+            <KpiCard label="Total facturado" value={<KpiValue porMoneda={d.total} />} />
             <KpiCard label="Pasajes vendidos" value={String(d.pasajes)} />
             <KpiCard label="Servicios realizados" value={String(d.servicios)} />
-            <KpiCard label="Ticket promedio" value={fmt(ticketProm)} />
+            <KpiCard label="Ticket promedio" value={<KpiValue porMoneda={ticketProm} />} />
           </div>
 
           <div className="flex items-start gap-5 px-8 pt-[22px]">
             <div className="flex-1 rounded-2xl border border-line bg-white p-[22px]">
               <div className="mb-4 text-[11px] font-bold uppercase tracking-wide text-ink-soft">Facturación por ruta</div>
               {d.rutas.map((r) => (
-                <div key={r.nombre} className="mb-3.5">
+                <div key={`${r.nombre}__${r.moneda}`} className="mb-3.5">
                   <div className="mb-1.5 flex justify-between text-[13px]">
                     <div className="font-semibold text-ink">{r.nombre}</div>
-                    <div className="text-ink-soft">{fmt(r.monto)}</div>
+                    <div className="text-ink-soft">{formatMonto(r.monto, r.moneda)}</div>
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full bg-[#EEF0F2]">
                     <div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: ACCENT }} />
@@ -244,7 +261,7 @@ export function ReportesClient({
                   <div className="font-semibold text-ink">{mov.pasajero}</div>
                   <div className="text-[#4B5563]">{mov.servicio}</div>
                   <div className="text-[#4B5563]">{mov.vendedor}</div>
-                  <div className="font-bold text-ink">{fmt(mov.monto)}</div>
+                  <div className="font-bold text-ink">{formatMonto(mov.monto, mov.moneda)}</div>
                   <div className="text-[#4B5563]">{mov.medio}</div>
                 </div>
               ))}
@@ -330,7 +347,7 @@ export function ReportesClient({
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string }) {
+function KpiCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-line bg-white px-5 py-[18px]">
       <div className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</div>

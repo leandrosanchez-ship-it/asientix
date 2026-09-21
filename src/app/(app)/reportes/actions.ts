@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, tienePermiso } from "@/lib/current-user";
 import { ACCENT } from "@/lib/theme";
 import { habitacionLabel } from "@/lib/habitacion";
+import type { Moneda } from "@/lib/types";
 
 const INK = "#1C1F27";
 const INK_SOFT = "#6B7280";
@@ -68,14 +69,16 @@ export interface MovimientoMes {
   servicio: string;
   vendedor: string;
   monto: number;
+  moneda: Moneda;
   medio: string;
 }
 
 export interface MesDataResult {
-  total: number;
+  total: Record<Moneda, number>;
   pasajes: number;
+  pasajesPorMoneda: Record<Moneda, number>;
   servicios: number;
-  rutas: { nombre: string; monto: number; pct: number }[];
+  rutas: { nombre: string; monto: number; moneda: Moneda; pct: number }[];
   movimientos: MovimientoMes[];
 }
 
@@ -104,12 +107,20 @@ export async function obtenerDatosMes(mesKey: string): Promise<MesDataResult> {
 
   const { data: serviciosData } = await supabase
     .from("servicios")
-    .select("id, origen, destino, fecha")
+    .select("id, origen, destino, fecha, moneda")
     .eq("agencia_id", usuario.agenciaId)
     .gte("fecha", desde)
     .lt("fecha", hasta);
-  const servicios = serviciosData ?? [];
-  if (servicios.length === 0) return { total: 0, pasajes: 0, servicios: 0, rutas: [], movimientos: [] };
+  const servicios = (serviciosData ?? []).map((s) => ({ ...s, moneda: (s.moneda as Moneda | null) ?? "ARS" }));
+  if (servicios.length === 0)
+    return {
+      total: { ARS: 0, USD: 0 },
+      pasajes: 0,
+      pasajesPorMoneda: { ARS: 0, USD: 0 },
+      servicios: 0,
+      rutas: [],
+      movimientos: [],
+    };
 
   const servicioPorId = new Map(servicios.map((s) => [s.id, s]));
   const servicioIds = servicios.map((s) => s.id);
@@ -146,23 +157,31 @@ export async function obtenerDatosMes(mesKey: string): Promise<MesDataResult> {
     vendedorIds.length > 0 ? await supabase.from("usuarios").select("id, nombre").in("id", vendedorIds) : { data: [] };
   const vendedorNombrePorId = new Map((usuariosData ?? []).map((u) => [u.id, u.nombre]));
 
-  const rutaMontoMap = new Map<string, number>();
+  // Un mismo destino puede salir en pesos y en dólares en el mismo mes (raro,
+  // pero pasa) -- se agrupa por destino+moneda, no solo por destino, para no
+  // sumar dos monedas distintas como si fueran la misma plata.
+  const rutaMontoMap = new Map<string, { nombre: string; moneda: Moneda; monto: number }>();
+  const pasajesPorMoneda: Record<Moneda, number> = { ARS: 0, USD: 0 };
   rps.forEach((rp) => {
     const servicioId = servicioPorAsiento.get(rp.asiento_id);
     const servicio = servicioId ? servicioPorId.get(servicioId) : undefined;
     if (!servicio) return;
-    rutaMontoMap.set(servicio.destino, (rutaMontoMap.get(servicio.destino) ?? 0) + Number(rp.precio));
+    const key = `${servicio.destino}__${servicio.moneda}`;
+    const actual = rutaMontoMap.get(key) ?? { nombre: servicio.destino, moneda: servicio.moneda, monto: 0 };
+    actual.monto += Number(rp.precio);
+    rutaMontoMap.set(key, actual);
+    pasajesPorMoneda[servicio.moneda] += 1;
   });
 
   const movimientos: MovimientoMes[] = [];
-  let total = 0;
+  const total: Record<Moneda, number> = { ARS: 0, USD: 0 };
   (pagosData ?? []).forEach((p) => {
     const rp = rpPorId.get(p.reserva_pasajero_id);
     if (!rp) return;
     const servicioId = servicioPorAsiento.get(rp.asiento_id);
     const servicio = servicioId ? servicioPorId.get(servicioId) : undefined;
     if (!servicio) return;
-    total += Number(p.monto);
+    total[servicio.moneda] += Number(p.monto);
     const cliente = clientePorId.get(rp.cliente_id);
     const vendedorId = vendedorIdPorReserva.get(rp.reserva_id);
     movimientos.push({
@@ -172,17 +191,18 @@ export async function obtenerDatosMes(mesKey: string): Promise<MesDataResult> {
       servicio: `${servicio.origen} → ${servicio.destino}`,
       vendedor: vendedorId ? (vendedorNombrePorId.get(vendedorId) ?? "—") : "—",
       monto: Number(p.monto),
+      moneda: servicio.moneda,
       medio: p.medio_pago === "efectivo" ? "Efectivo" : p.medio_pago === "transferencia" ? "Transferencia" : "Tarjeta",
     });
   });
   movimientos.sort((a, b) => (a.fechaOrden < b.fechaOrden ? 1 : -1));
 
-  const maxRuta = Math.max(1, ...rutaMontoMap.values());
-  const rutas = [...rutaMontoMap.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([nombre, monto]) => ({ nombre, monto, pct: Math.max(Math.round((monto / maxRuta) * 100), 4) }));
+  const maxRuta = Math.max(1, ...[...rutaMontoMap.values()].map((r) => r.monto));
+  const rutas = [...rutaMontoMap.values()]
+    .sort((a, b) => b.monto - a.monto)
+    .map((r) => ({ ...r, pct: Math.max(Math.round((r.monto / maxRuta) * 100), 4) }));
 
-  return { total, pasajes: rps.length, servicios: servicios.length, rutas, movimientos };
+  return { total, pasajes: rps.length, pasajesPorMoneda, servicios: servicios.length, rutas, movimientos };
 }
 
 export interface GenerarListaPasajerosInput {

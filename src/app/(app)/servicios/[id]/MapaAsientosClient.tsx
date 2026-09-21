@@ -529,6 +529,7 @@ export function MapaAsientosClient({
           cliente={modalSeat.cliente}
           saldo={datosGrupo(modalNumero!).saldo}
           precioTotal={datosGrupo(modalNumero!).total}
+          moneda={servicio.moneda}
           grupo={grupoDe(modalNumero!)}
           accent={ACCENT}
           servicioId={servicio.id}

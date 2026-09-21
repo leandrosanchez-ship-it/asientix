@@ -4,12 +4,15 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cerrarCaja } from "./actions";
 import { ACCENT } from "@/lib/theme";
+import { formatMonto } from "@/lib/format";
+import type { Moneda } from "@/lib/types";
 
 export interface Movimiento {
   hora: string;
   pasajero: string;
   medio: string;
   monto: number;
+  moneda: Moneda;
 }
 
 export interface Cierre {
@@ -19,13 +22,16 @@ export interface Cierre {
   cerradoPor: string | null;
 }
 
-function fmt(n: number) {
-  return "$" + Math.round(n).toLocaleString("es-AR");
+function fmtDif(n: number) {
+  if (n === 0) return formatMonto(0);
+  return (n > 0 ? "+" : "−") + formatMonto(Math.abs(n));
 }
 
-function fmtDif(n: number) {
-  if (n === 0) return fmt(0);
-  return (n > 0 ? "+" : "−") + fmt(Math.abs(n));
+/** "$140" · "US$60" para el mismo KPI, o "$0" si no hubo movimientos en ninguna moneda. */
+function KpiValue({ porMoneda }: { porMoneda: Record<Moneda, number> }) {
+  const entradas = (Object.entries(porMoneda) as [Moneda, number][]).filter(([, n]) => n !== 0);
+  if (entradas.length === 0) return <>{formatMonto(0)}</>;
+  return <>{entradas.map(([moneda, n]) => formatMonto(n, moneda)).join(" · ")}</>;
 }
 
 function ArrowLeft() {
@@ -61,10 +67,10 @@ export function CajaClient({
   fechaAnteriorIso: string;
   fechaSiguienteIso: string;
   hoyIso: string;
-  total: number;
-  efectivo: number;
-  transferencia: number;
-  tarjeta: number;
+  total: Record<Moneda, number>;
+  efectivo: Record<Moneda, number>;
+  transferencia: Record<Moneda, number>;
+  tarjeta: Record<Moneda, number>;
   movimientos: Movimiento[];
   cierre: Cierre | null;
 }) {
@@ -78,16 +84,24 @@ export function CajaClient({
     router.push(`/caja?fecha=${fechaIso}`);
   }
 
+  // El arqueo (cerrar caja) solo sabe reconciliar pesos -- si hubo efectivo
+  // en dólares ese día, se muestra aparte (más abajo) pero no entra en esta
+  // cuenta, porque no tiene sentido contar billetes de ARS y USD juntos.
+  const efectivoArs = efectivo.ARS ?? 0;
+  const efectivoOtrasMonedas = (Object.entries(efectivo) as [Moneda, number][]).filter(
+    ([moneda, n]) => moneda !== "ARS" && n !== 0,
+  );
+
   const contadoNum = parseFloat(contado);
   const hasContado = contado !== "" && !isNaN(contadoNum);
-  const diferencia = cerrado && !hasContado ? (cierre?.diferencia ?? null) : hasContado ? contadoNum - efectivo : null;
+  const diferencia = cerrado && !hasContado ? (cierre?.diferencia ?? null) : hasContado ? contadoNum - efectivoArs : null;
 
   function handleCerrar() {
     if (!hasContado) return;
     setError(null);
     startTransition(async () => {
       try {
-        await cerrarCaja({ efectivoEsperado: efectivo, efectivoContado: contadoNum });
+        await cerrarCaja({ efectivoEsperado: efectivoArs, efectivoContado: contadoNum });
         setCerrado(true);
         router.refresh();
       } catch (e) {
@@ -137,10 +151,10 @@ export function CajaClient({
       </div>
 
       <div className="grid grid-cols-4 gap-3.5 px-8 pt-[18px]">
-        <KpiCard label={esHoy ? "Total cobrado hoy" : "Total cobrado ese día"} value={fmt(total)} />
-        <KpiCard label="Efectivo" value={fmt(efectivo)} />
-        <KpiCard label="Transferencia" value={fmt(transferencia)} />
-        <KpiCard label="Tarjeta" value={fmt(tarjeta)} />
+        <KpiCard label={esHoy ? "Total cobrado hoy" : "Total cobrado ese día"} value={<KpiValue porMoneda={total} />} />
+        <KpiCard label="Efectivo" value={<KpiValue porMoneda={efectivo} />} />
+        <KpiCard label="Transferencia" value={<KpiValue porMoneda={transferencia} />} />
+        <KpiCard label="Tarjeta" value={<KpiValue porMoneda={tarjeta} />} />
       </div>
 
       <div className="flex items-start gap-[18px] px-8 py-5">
@@ -159,7 +173,7 @@ export function CajaClient({
               <div className="text-[#4B5563]">{m.hora}</div>
               <div className="font-semibold text-ink">{m.pasajero}</div>
               <div className="text-[#4B5563]">{m.medio}</div>
-              <div className="font-bold text-ink">{fmt(m.monto)}</div>
+              <div className="font-bold text-ink">{formatMonto(m.monto, m.moneda)}</div>
             </div>
           ))}
           {movimientos.length === 0 && (
@@ -176,8 +190,18 @@ export function CajaClient({
 
           <div className="flex justify-between border-b border-[#EEF0F2] pb-3">
             <div className="text-[13px] text-ink-soft">Efectivo esperado</div>
-            <div className="text-[14px] font-bold text-ink">{fmt(efectivo)}</div>
+            <div className="text-[14px] font-bold text-ink">{formatMonto(efectivoArs)}</div>
           </div>
+
+          {efectivoOtrasMonedas.length > 0 && (
+            <div className="mt-2 rounded-lg border border-[#FBE0A0] bg-[#FEF3C7] px-3 py-2 text-[11.5px] leading-relaxed text-[#92400E]">
+              {efectivoOtrasMonedas.map(([moneda, n]) => (
+                <div key={moneda}>
+                  + {formatMonto(n, moneda)} en efectivo — no se incluye en este arqueo (solo cuenta pesos).
+                </div>
+              ))}
+            </div>
+          )}
 
           {esHoy ? (
             <>
@@ -236,7 +260,7 @@ export function CajaClient({
             <>
               <div className="mt-3.5 flex justify-between border-b border-[#EEF0F2] pb-3">
                 <div className="text-[13px] text-ink-soft">Efectivo contado</div>
-                <div className="text-[14px] font-bold text-ink">{fmt(cierre.efectivoContado)}</div>
+                <div className="text-[14px] font-bold text-ink">{formatMonto(cierre.efectivoContado)}</div>
               </div>
               <div className="mt-3.5 flex items-baseline justify-between border-t border-[#EEF0F2] pt-3.5">
                 <div className="text-[13px] font-bold text-ink">Diferencia</div>
@@ -262,7 +286,7 @@ export function CajaClient({
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string }) {
+function KpiCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-line bg-white px-[18px] py-4">
       <div className="text-[10px] uppercase tracking-wide text-ink-faint">{label}</div>

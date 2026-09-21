@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requirePantalla } from "@/lib/current-user";
 import { CajaClient, type Movimiento, type Cierre } from "./CajaClient";
+import type { Moneda } from "@/lib/types";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -39,7 +40,7 @@ export default async function CajaPage({ searchParams }: PageProps<"/caja">) {
 
   const { data: pagosData } = await supabase
     .from("pagos")
-    .select("id, reserva_pasajero_id, monto, medio_pago, fecha")
+    .select("id, reserva_pasajero_id, monto, medio_pago, moneda, fecha")
     .gte("fecha", inicio)
     .lt("fecha", fin)
     .order("fecha", { ascending: true });
@@ -58,6 +59,28 @@ export default async function CajaPage({ searchParams }: PageProps<"/caja">) {
       : { data: [] };
   const clientePorId = new Map((clientesData ?? []).map((c) => [c.id, c]));
 
+  // pagos.moneda solo se carga para efectivo (qué billete físico entró a la
+  // caja, ver migración 0007_pagos_moneda.sql) -- para transferencia/tarjeta
+  // no hay billete que contar, así que la moneda del cobro es la del
+  // servicio que se está pagando.
+  const reservaIds = [...new Set((rpData ?? []).map((rp) => rp.reserva_id))];
+  const { data: reservasData } =
+    reservaIds.length > 0
+      ? await supabase.from("reservas").select("id, servicio_id").in("id", reservaIds)
+      : { data: [] };
+  const servicioIdPorReserva = new Map((reservasData ?? []).map((r) => [r.id, r.servicio_id]));
+  const servicioIds = [...new Set((reservasData ?? []).map((r) => r.servicio_id))];
+  const { data: serviciosData } =
+    servicioIds.length > 0 ? await supabase.from("servicios").select("id, moneda").in("id", servicioIds) : { data: [] };
+  const monedaPorServicio = new Map((serviciosData ?? []).map((s) => [s.id, (s.moneda as Moneda | null) ?? "ARS"]));
+
+  function monedaDelPago(p: (typeof pagos)[number]): Moneda {
+    if (p.moneda) return p.moneda as Moneda;
+    const rp = rpPorId.get(p.reserva_pasajero_id);
+    const servicioId = rp ? servicioIdPorReserva.get(rp.reserva_id) : undefined;
+    return (servicioId ? monedaPorServicio.get(servicioId) : undefined) ?? "ARS";
+  }
+
   // Un cobro real (al reservar, al saldar un grupo, un pago parcial en
   // Cobros) inserta un pago por cada pasajero que abarca, todos con el
   // mismo instante exacto (el insert en bloque comparte el mismo now()) —
@@ -66,6 +89,7 @@ export default async function CajaPage({ searchParams }: PageProps<"/caja">) {
   interface Grupo {
     fecha: string;
     medio: string;
+    moneda: Moneda;
     monto: number;
     rpIds: Set<string>;
   }
@@ -73,8 +97,12 @@ export default async function CajaPage({ searchParams }: PageProps<"/caja">) {
   pagos.forEach((p) => {
     const rp = rpPorId.get(p.reserva_pasajero_id);
     if (!rp) return;
-    const key = `${rp.reserva_id}__${p.fecha}__${p.medio_pago}`;
-    const g = grupos.get(key) ?? { fecha: p.fecha, medio: p.medio_pago, monto: 0, rpIds: new Set<string>() };
+    const moneda = monedaDelPago(p);
+    // La moneda entra en la clave -- si alguna vez un mismo cobro mezclara
+    // billetes de dos monedas (no debería pasar hoy), se ven como dos
+    // movimientos separados en vez de sumarse como si fueran la misma plata.
+    const key = `${rp.reserva_id}__${p.fecha}__${p.medio_pago}__${moneda}`;
+    const g = grupos.get(key) ?? { fecha: p.fecha, medio: p.medio_pago, moneda, monto: 0, rpIds: new Set<string>() };
     g.monto += Number(p.monto);
     g.rpIds.add(p.reserva_pasajero_id);
     grupos.set(key, g);
@@ -91,16 +119,25 @@ export default async function CajaPage({ searchParams }: PageProps<"/caja">) {
       pasajero: rpsDelGrupo.length > 1 ? `${nombreBase} +${rpsDelGrupo.length - 1}` : nombreBase,
       medio: g.medio === "efectivo" ? "Efectivo" : g.medio === "transferencia" ? "Transferencia" : "Tarjeta",
       monto: g.monto,
+      moneda: g.moneda,
       fechaOrden: g.fecha,
     };
   });
   movimientos.sort((a, b) => (a.fechaOrden < b.fechaOrden ? -1 : 1));
 
-  const total = movimientos.reduce((s, m) => s + m.monto, 0);
-  const porMedio = (medio: string) => movimientos.filter((m) => m.medio === medio).reduce((s, m) => s + m.monto, 0);
-  const efectivo = porMedio("Efectivo");
-  const transferencia = porMedio("Transferencia");
-  const tarjeta = porMedio("Tarjeta");
+  // Saldos en distintas monedas no se suman entre sí (mismo criterio que
+  // Cobros) -- cada total es un mapa por moneda, no un número único.
+  function sumarPorMoneda(items: (Movimiento & { fechaOrden: string })[]): Record<Moneda, number> {
+    const acc: Record<Moneda, number> = { ARS: 0, USD: 0 };
+    items.forEach((m) => {
+      acc[m.moneda] = (acc[m.moneda] ?? 0) + m.monto;
+    });
+    return acc;
+  }
+  const total = sumarPorMoneda(movimientos);
+  const efectivo = sumarPorMoneda(movimientos.filter((m) => m.medio === "Efectivo"));
+  const transferencia = sumarPorMoneda(movimientos.filter((m) => m.medio === "Transferencia"));
+  const tarjeta = sumarPorMoneda(movimientos.filter((m) => m.medio === "Tarjeta"));
 
   const { data: cierreData } = await supabase
     .from("cierres_caja")

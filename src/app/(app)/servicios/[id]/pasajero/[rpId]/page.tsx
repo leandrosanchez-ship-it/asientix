@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requirePantalla } from "@/lib/current-user";
 import { CancelacionClient, type EventoHistorial, type ServicioOption } from "./CancelacionClient";
+import { formatMonto } from "@/lib/format";
+import type { Moneda } from "@/lib/types";
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -18,14 +20,14 @@ function isoLocal(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-function tituloEvento(accion: string, motivo: string | null, detalle: Record<string, unknown> | null): string {
+function tituloEvento(accion: string, motivo: string | null, detalle: Record<string, unknown> | null, moneda: Moneda): string {
   if (accion === "creada") {
     const pasajeros = (detalle?.pasajeros as string[] | undefined) ?? [];
     return pasajeros.length > 0 ? `Reserva creada — ${pasajeros.join(", ")}` : "Reserva creada";
   }
   if (accion === "pago_registrado") {
     const monto = detalle?.monto as number | undefined;
-    return monto ? `Pago registrado — $${Math.round(monto).toLocaleString("es-AR")}` : "Pago registrado";
+    return monto ? `Pago registrado — ${formatMonto(monto, moneda)}` : "Pago registrado";
   }
   if (accion === "cancelada") {
     const asiento = detalle?.asiento as number | undefined;
@@ -66,10 +68,11 @@ export default async function CancelacionPage({
 
   const { data: servicio } = await supabase
     .from("servicios")
-    .select("id, origen, destino, fecha, hora")
+    .select("id, origen, destino, fecha, hora, moneda")
     .eq("id", asiento.servicio_id)
     .single();
   if (!servicio) notFound();
+  const moneda = (servicio.moneda as Moneda | null) ?? "ARS";
 
   const totalPagado = (pagos ?? []).reduce((s, p) => s + Number(p.monto), 0);
 
@@ -94,7 +97,7 @@ export default async function CancelacionPage({
     .order("created_at", { ascending: true });
 
   const historial: EventoHistorial[] = (eventosData ?? []).map((e) => ({
-    titulo: tituloEvento(e.accion, e.motivo, e.detalle as Record<string, unknown> | null),
+    titulo: tituloEvento(e.accion, e.motivo, e.detalle as Record<string, unknown> | null, moneda),
     fecha: new Date(e.created_at).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }),
   }));
 
@@ -107,6 +110,7 @@ export default async function CancelacionPage({
       servicioLabel={`${servicio.origen} → ${servicio.destino} · ${fechaCorta(servicio.fecha)}`}
       estadoInicial={rp.estado}
       saldoPagado={totalPagado}
+      moneda={moneda}
       proximasSalidas={proximasSalidas}
       historialInicial={historial}
     />
