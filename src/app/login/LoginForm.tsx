@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
@@ -31,7 +32,16 @@ export function LoginForm() {
     setLoading(false);
 
     if (signInError) {
-      setError("Email o contraseña incorrectos.");
+      // isAuthRetryableFetchError distingue una falla de red/servidor (ej. el
+      // incidente de latencia de Supabase del 29/9/2026, o el proyecto
+      // pausado) de credenciales realmente incorrectas — antes mostraba
+      // "contraseña incorrecta" en ambos casos, lo cual confundía a un
+      // usuario con la contraseña bien pero el backend caído.
+      setError(
+        isAuthRetryableFetchError(signInError)
+          ? "No se pudo conectar con el servidor. Probá de nuevo en un momento."
+          : "Email o contraseña incorrectos.",
+      );
       return;
     }
 
